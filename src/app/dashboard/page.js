@@ -102,7 +102,14 @@ export default function DashboardPage() {
           }),
         });
         const data = await response.json();
-        next = response.ok ? data.number : null;
+        if (!response.ok) {
+          setNotice(
+            data.error || "Não foi possível conectar à sequência central.",
+          );
+          next = null;
+        } else {
+          next = data.number;
+        }
       } catch {
         next = null;
       }
