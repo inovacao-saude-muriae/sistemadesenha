@@ -170,7 +170,9 @@ export default function DashboardPage() {
   }, [calling, sound, sector, current]);
 
   return (
-    <main className={styles.shell}>
+    <main
+      className={`${styles.shell} ${session?.accessLevel === 2 ? styles.secondary : ""}`}
+    >
       <aside className={styles.sidebar}>
         <nav className={styles.nav}>
           <Link className={styles.activeNav} href="/dashboard">

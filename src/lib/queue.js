@@ -42,13 +42,43 @@ export const ATTENDANT_ACCOUNTS = {
     name: "Recepção Atendimento",
     initials: "RA",
     sector: "recepcao",
+    accessLevel: 1,
     password: "recepcao123",
+  },
+  "recepcao-atendimento1": {
+    name: "Recepção Atendimento Principal",
+    initials: "R1",
+    sector: "recepcao",
+    accessLevel: 1,
+    password: "recepcao123",
+  },
+  "recepcao-atendimento2": {
+    name: "Recepção Atendimento 2",
+    initials: "R2",
+    sector: "recepcao",
+    accessLevel: 2,
+    password: "recepcao2123",
   },
   "farmacia-atendimento": {
     name: "Farmácia Atendimento",
     initials: "FA",
     sector: "farmacia",
+    accessLevel: 1,
     password: "farmacia123",
+  },
+  "farmacia-atendimento1": {
+    name: "Farmácia Atendimento Principal",
+    initials: "F1",
+    sector: "farmacia",
+    accessLevel: 1,
+    password: "farmacia123",
+  },
+  "farmacia-atendimento2": {
+    name: "Farmácia Atendimento 2",
+    initials: "F2",
+    sector: "farmacia",
+    accessLevel: 2,
+    password: "farmacia2123",
   },
 };
 
