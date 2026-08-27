@@ -3,6 +3,12 @@ import { prisma } from "../../../lib/prisma-client";
 const imagePattern = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/;
 
 export async function GET() {
+  if (!process.env.DATABASE_URL) {
+    return Response.json(
+      { error: "DATABASE_URL não configurada na Vercel." },
+      { status: 503 },
+    );
+  }
   try {
     const data =
       await prisma.$queryRaw`SELECT id, title, image_url FROM public.news WHERE active = true ORDER BY created_at DESC LIMIT 8`;
@@ -22,6 +28,12 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  if (!process.env.DATABASE_URL) {
+    return Response.json(
+      { error: "DATABASE_URL não configurada na Vercel." },
+      { status: 503 },
+    );
+  }
   try {
     const { title, image } = await request.json();
     const match = String(image || "").match(imagePattern);
@@ -56,6 +68,12 @@ export async function POST(request) {
 }
 
 export async function DELETE(request) {
+  if (!process.env.DATABASE_URL) {
+    return Response.json(
+      { error: "DATABASE_URL não configurada na Vercel." },
+      { status: 503 },
+    );
+  }
   try {
     const id = Number(new URL(request.url).searchParams.get("id"));
     if (!Number.isInteger(id) || id < 1)
