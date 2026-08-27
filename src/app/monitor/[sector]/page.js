@@ -94,6 +94,21 @@ export default function MonitorPage({ params }) {
   }, [news.length]);
 
   useEffect(() => {
+    const syncCentralQueue = () =>
+      fetch(`/api/queue/call?sector=${sector}`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((centralQueue) => {
+          if (!centralQueue) return;
+          const currentState = getQueueSnapshot();
+          saveQueueState({ ...currentState, [sector]: centralQueue });
+        })
+        .catch(() => undefined);
+    syncCentralQueue();
+    const queueRefreshTimer = window.setInterval(syncCentralQueue, 2000);
+    return () => window.clearInterval(queueRefreshTimer);
+  }, [sector]);
+
+  useEffect(() => {
     if (!isSupabaseConfigured) return undefined;
     const channel = supabase
       .channel(`monitor-${sector}`)

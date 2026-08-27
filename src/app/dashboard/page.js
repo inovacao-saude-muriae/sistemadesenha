@@ -78,6 +78,28 @@ export default function DashboardPage() {
     };
   }, [router]);
 
+  useEffect(() => {
+    if (!session?.sector) return undefined;
+    const syncCentralQueue = () =>
+      fetch(`/api/queue/call?sector=${session.sector}`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((centralQueue) => {
+          if (!centralQueue) return;
+          const currentState = readQueueState();
+          saveQueueState({
+            ...currentState,
+            [session.sector]: {
+              ...normalizeQueue(centralQueue),
+              historyDate: new Date().toISOString().slice(0, 10),
+            },
+          });
+        })
+        .catch(() => undefined);
+    syncCentralQueue();
+    const timer = window.setInterval(syncCentralQueue, 2000);
+    return () => window.clearInterval(timer);
+  }, [session?.sector]);
+
   const sector = session?.sector || "farmacia";
   const current = normalizeQueue(state[sector]);
   const sectorInfo = SECTORS[sector];

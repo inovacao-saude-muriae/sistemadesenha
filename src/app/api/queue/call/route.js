@@ -3,6 +3,43 @@ import { prisma } from "../../../../lib/prisma-client";
 const validSectors = ["farmacia", "recepcao"];
 const validTypes = ["normal", "preferencial"];
 
+export async function GET(request) {
+  const sector = new URL(request.url).searchParams.get("sector");
+  if (!validSectors.includes(sector))
+    return Response.json({ error: "Serviço inválido." }, { status: 400 });
+  try {
+    const sequences =
+      await prisma.$queryRaw`SELECT call_type, current_number FROM public.queue_sequences WHERE sector_id = ${sector}`;
+    const calls =
+      await prisma.$queryRaw`SELECT number_int, type, created_at FROM public.queue_calls WHERE sector_id = ${sector} ORDER BY created_at DESC LIMIT 8`;
+    const current = { normalCurrent: 0, priorityCurrent: 0 };
+    for (const sequence of sequences)
+      current[
+        sequence.call_type === "preferencial"
+          ? "priorityCurrent"
+          : "normalCurrent"
+      ] = Number(sequence.current_number);
+    return Response.json({
+      ...current,
+      history: calls.map((call) => ({
+        number: call.number_int,
+        type: call.type === "preferential" ? "preferencial" : "normal",
+        time: new Intl.DateTimeFormat("pt-BR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(new Date(call.created_at)),
+      })),
+    });
+  } catch (error) {
+    return Response.json(
+      {
+        error: `Falha ao consultar a sequência: ${error.message || "erro desconhecido"}`,
+      },
+      { status: 503 },
+    );
+  }
+}
+
 export async function POST(request) {
   try {
     if (!process.env.DATABASE_URL) {
