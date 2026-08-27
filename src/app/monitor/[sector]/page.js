@@ -6,6 +6,7 @@ import { Clock3 } from "lucide-react";
 import {
   formatQueueNumber,
   getQueueSnapshot,
+  playCallAlert,
   saveQueueState,
   SECTORS,
   subscribeQueue,
@@ -16,18 +17,8 @@ import styles from "./Monitor.module.css";
 let newsSnapshot = [];
 const serverNewsSnapshot = [];
 const monitorServerSnapshot = {
-  farmacia: {
-    normalCurrent: 0,
-    priorityCurrent: 0,
-    history: [],
-    historyDate: "",
-  },
-  recepcao: {
-    normalCurrent: 0,
-    priorityCurrent: 0,
-    history: [],
-    historyDate: "",
-  },
+  farmacia: { normalCurrent: 0, priorityCurrent: 0, history: [] },
+  recepcao: { normalCurrent: 0, priorityCurrent: 0, history: [] },
 };
 
 function getNewsSnapshot() {
@@ -49,71 +40,59 @@ export default function MonitorPage({ params }) {
   const state = useSyncExternalStore(
     subscribeQueue,
     getQueueSnapshot,
-    () => monitorServerSnapshot,
+    () => monitorServerSnapshot
   );
   const news = useSyncExternalStore(
     subscribeNews,
     getNewsSnapshot,
-    () => serverNewsSnapshot,
+    () => serverNewsSnapshot
   );
+
   const [time, setTime] = useState("");
   const [newsIndex, setNewsIndex] = useState(0);
 
+  // 1. Relógio e Carrossel de Notícias
   useEffect(() => {
     const refreshNews = () =>
       fetch("/api/news")
-        .then((response) => (response.ok ? response.json() : null))
+        .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (!data?.news) return;
           newsSnapshot = data.news;
           window.dispatchEvent(new Event("news-updated"));
         })
         .catch(() => undefined);
-    refreshNews();
-    const newsRefreshTimer = window.setInterval(refreshNews, 5000);
-    return () => window.clearInterval(newsRefreshTimer);
-  }, []);
 
-  useEffect(() => {
-    const timer = window.setInterval(() => {
+    refreshNews();
+    const newsRefreshTimer = setInterval(refreshNews, 10000);
+
+    const clockTimer = setInterval(() => {
       setTime(
         new Intl.DateTimeFormat("pt-BR", {
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
-        }).format(new Date()),
+        }).format(new Date())
       );
     }, 1000);
-    const newsTimer = window.setInterval(() => {
+
+    const newsTimer = setInterval(() => {
       setNewsIndex((index) => (news.length ? (index + 1) % news.length : 0));
     }, 6000);
+
     return () => {
-      window.clearInterval(timer);
-      window.clearInterval(newsTimer);
+      clearInterval(newsRefreshTimer);
+      clearInterval(clockTimer);
+      clearInterval(newsTimer);
     };
   }, [news.length]);
 
+  // 2. Supabase Realtime (Chamadas de Senha Instantâneas)
   useEffect(() => {
-    const syncCentralQueue = () =>
-      fetch(`/api/queue/call?sector=${sector}`)
-        .then((response) => (response.ok ? response.json() : null))
-        .then((centralQueue) => {
-          if (!centralQueue) return;
-          const currentState = getQueueSnapshot();
-          const previousQueue = currentState[sector] || {};
-          if (JSON.stringify(previousQueue) !== JSON.stringify(centralQueue))
-            saveQueueState({ ...currentState, [sector]: centralQueue });
-        })
-        .catch(() => undefined);
-    syncCentralQueue();
-    const queueRefreshTimer = window.setInterval(syncCentralQueue, 3000);
-    return () => window.clearInterval(queueRefreshTimer);
-  }, [sector]);
+    if (!isSupabaseConfigured || !supabase) return;
 
-  useEffect(() => {
-    if (!isSupabaseConfigured) return undefined;
     const channel = supabase
-      .channel(`monitor-${sector}`)
+      .channel(`realtime-monitor-${sector}`)
       .on(
         "postgres_changes",
         {
@@ -122,18 +101,23 @@ export default function MonitorPage({ params }) {
           table: "queue_calls",
           filter: `sector_id=eq.${sector}`,
         },
-        ({ new: call }) => {
+        (payload) => {
+          const call = payload.new;
           const previous = getQueueSnapshot();
           const queue = previous[sector] || {};
           const field =
             call.type === "preferential" ? "priorityCurrent" : "normalCurrent";
+
+          const callTypeFormatted =
+            call.type === "preferential" ? "preferencial" : "normal";
+
           const nextQueue = {
             ...queue,
             [field]: call.number_int,
             history: [
               {
                 number: call.number_int,
-                type: call.type === "preferential" ? "preferencial" : "normal",
+                type: callTypeFormatted,
                 time: new Intl.DateTimeFormat("pt-BR", {
                   hour: "2-digit",
                   minute: "2-digit",
@@ -142,10 +126,24 @@ export default function MonitorPage({ params }) {
               ...(queue.history || []),
             ].slice(0, 8),
           };
+
+          // Salva e notifica a aplicação em tempo real
           saveQueueState({ ...previous, [sector]: nextQueue });
-        },
+
+          // Som de Alerta e Leitura por Voz Instantâneos
+          playCallAlert();
+          if ("speechSynthesis" in window) {
+            window.speechSynthesis.cancel(); // Limpa chamadas anteriores
+            const text = `Senha ${formatQueueNumber(
+              call.number_int,
+              callTypeFormatted
+            )}, dirigir-se ao atendimento.`;
+            window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+          }
+        }
       )
       .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
     };
@@ -182,10 +180,13 @@ export default function MonitorPage({ params }) {
           </div>
         </div>
       </header>
+
       <div className={styles.content}>
         <section className={styles.leftColumn}>
           <section
-            className={`${styles.featured} ${latest.type === "preferencial" ? styles.featuredPriority : ""}`}
+            className={`${styles.featured} ${
+              latest.type === "preferencial" ? styles.featuredPriority : ""
+            }`}
           >
             <p>SENHA</p>
             <strong>{formatQueueNumber(latest.number, latest.type)}</strong>
@@ -196,6 +197,7 @@ export default function MonitorPage({ params }) {
             </span>
             <small>Dirija-se ao balcão de atendimento</small>
           </section>
+
           <section className={styles.recent}>
             <p className={styles.kicker}>ÚLTIMAS SENHAS</p>
             {current.history.slice(0, 4).map((item, index) => (
@@ -228,6 +230,7 @@ export default function MonitorPage({ params }) {
             ))}
           </section>
         </section>
+
         <section className={styles.news}>
           {news.length ? (
             <>
