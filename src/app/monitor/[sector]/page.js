@@ -35,46 +35,40 @@ function subscribeNews(callback) {
   };
 }
 
-// Disparador de voz resiliente a eventos assíncronos
-function speakQueueNumber(text) {
+// Reprodução isolada e garantida da voz
+function speakText(text) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
-  // 1. Toca o alerta de sinalização sonora
-  playCallAlert();
-
-  // 2. Destrava o motor da Web Speech API se o navegador o tiver pausado
-  if (window.speechSynthesis.paused) {
-    window.speechSynthesis.resume();
-  }
-
-  // 3. Cancela falas anteriores pendentes para evitar acúmulo em fila
-  window.speechSynthesis.cancel();
-
-  setTimeout(() => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "pt-BR";
-    utterance.rate = 0.95;
-    utterance.pitch = 1.0;
-
-    const voices = window.speechSynthesis.getVoices();
-    const ptVoice = voices.find(
-      (v) => v.lang.includes("pt-BR") || v.lang.includes("pt_BR") || v.lang.includes("pt")
-    );
-    if (ptVoice) {
-      utterance.voice = ptVoice;
+  try {
+    // 1. Toca o alerta sonoro (se falhar, não trava a voz)
+    try {
+      playCallAlert();
+    } catch {
+      // Ignora erro do bipe para não interromper a fala
     }
 
-    // Mantém a engine ativa durante a reprodução
-    utterance.onend = () => {
-      window.speechSynthesis.cancel();
-    };
+    // 2. Destrava motor de voz do navegador
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
+    window.speechSynthesis.cancel();
 
-    utterance.onerror = () => {
-      window.speechSynthesis.cancel();
-    };
+    setTimeout(() => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "pt-BR";
+      utterance.rate = 0.95;
 
-    window.speechSynthesis.speak(utterance);
-  }, 120);
+      const voices = window.speechSynthesis.getVoices();
+      const ptVoice = voices.find(
+        (v) => v.lang.includes("pt-BR") || v.lang.includes("pt_BR") || v.lang.includes("pt")
+      );
+      if (ptVoice) utterance.voice = ptVoice;
+
+      window.speechSynthesis.speak(utterance);
+    }, 100);
+  } catch (e) {
+    console.error("Erro na síntese de voz:", e);
+  }
 }
 
 export default function MonitorPage({ params }) {
@@ -94,30 +88,21 @@ export default function MonitorPage({ params }) {
   const [newsIndex, setNewsIndex] = useState(0);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
 
-  // Inicializa o carregamento de vozes e o Keep-Alive da fala
   useEffect(() => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-
-    const loadVoices = () => window.speechSynthesis.getVoices();
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-
-    // Loop de prevenção para manter o manipulador de voz acordado
-    const keepAliveTimer = setInterval(() => {
-      if (window.speechSynthesis.speaking) {
-        window.speechSynthesis.pause();
-        window.speechSynthesis.resume();
-      }
-    }, 5000);
-
-    return () => clearInterval(keepAliveTimer);
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
+    }
   }, []);
 
   function enableAudio() {
-    speakQueueNumber("Som do monitor ativado.");
+    speakText("Som do monitor ativado.");
     setAudioUnlocked(true);
   }
 
+  // Notícias
   useEffect(() => {
     fetch("/api/news")
       .then((res) => (res.ok ? res.json() : null))
@@ -129,6 +114,7 @@ export default function MonitorPage({ params }) {
       .catch(() => undefined);
   }, []);
 
+  // Relógio
   useEffect(() => {
     const clockTimer = setInterval(() => {
       setTime(
@@ -150,12 +136,49 @@ export default function MonitorPage({ params }) {
     };
   }, [news.length]);
 
-  // Escuta no Supabase Realtime (Dispara para qualquer atendimento)
+  // Supabase Realtime (Inscrição Híbrida: Postgres Changes + Broadcast Direct)
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
 
+    const processCall = (numberInt, typeStr, createdAt) => {
+      const previous = getQueueSnapshot();
+      const queue = previous[sector] || {};
+      const callTypeFormatted =
+        typeStr === "preferential" || typeStr === "preferencial"
+          ? "preferencial"
+          : "normal";
+      const field =
+        callTypeFormatted === "preferencial" ? "priorityCurrent" : "normalCurrent";
+
+      const nextQueue = {
+        ...queue,
+        [field]: numberInt,
+        history: [
+          {
+            number: numberInt,
+            type: callTypeFormatted,
+            time: new Intl.DateTimeFormat("pt-BR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            }).format(new Date(createdAt || Date.now())),
+          },
+          ...(queue.history || []),
+        ].slice(0, 8),
+      };
+
+      saveQueueState({ ...previous, [sector]: nextQueue });
+
+      const textToSpeak = `Senha ${formatQueueNumber(
+        numberInt,
+        callTypeFormatted
+      )}, dirigir-se ao atendimento.`;
+
+      speakText(textToSpeak);
+    };
+
     const channel = supabase
       .channel(`realtime-monitor-${sector}`)
+      // Escuta 1: Alteração no Banco de Dados
       .on(
         "postgres_changes",
         {
@@ -165,42 +188,25 @@ export default function MonitorPage({ params }) {
           filter: `sector_id=eq.${sector}`,
         },
         (payload) => {
-          const call = payload.new;
-          if (!call || !call.number_int) return;
-
-          const previous = getQueueSnapshot();
-          const queue = previous[sector] || {};
-          const field =
-            call.type === "preferential" ? "priorityCurrent" : "normalCurrent";
-          const callTypeFormatted =
-            call.type === "preferential" ? "preferencial" : "normal";
-
-          const nextQueue = {
-            ...queue,
-            [field]: call.number_int,
-            history: [
-              {
-                number: call.number_int,
-                type: callTypeFormatted,
-                time: new Intl.DateTimeFormat("pt-BR", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }).format(new Date(call.created_at || Date.now())),
-              },
-              ...(queue.history || []),
-            ].slice(0, 8),
-          };
-
-          saveQueueState({ ...previous, [sector]: nextQueue });
-
-          const textToSpeak = `Senha ${formatQueueNumber(
-            call.number_int,
-            callTypeFormatted
-          )}, dirigir-se ao atendimento.`;
-
-          speakQueueNumber(textToSpeak);
+          if (payload?.new?.number_int) {
+            processCall(
+              payload.new.number_int,
+              payload.new.type,
+              payload.new.created_at
+            );
+          }
         }
       )
+      // Escuta 2: Broadcast Direto da API (Garante recebimento caso o RLS bloqueie)
+      .on("broadcast", { event: "new_call" }, (response) => {
+        if (response?.payload?.number_int) {
+          processCall(
+            response.payload.number_int,
+            response.payload.type,
+            response.payload.created_at
+          );
+        }
+      })
       .subscribe();
 
     return () => {
