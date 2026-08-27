@@ -71,34 +71,10 @@ export default function DashboardPage() {
     };
   }, [router]);
 
-  useEffect(() => {
-    if (!session?.sector) return undefined;
-    const syncCentralQueue = () =>
-      fetch(`/api/queue/call?sector=${session.sector}`)
-        .then((response) => (response.ok ? response.json() : null))
-        .then((centralQueue) => {
-          if (!centralQueue) return;
-          const currentState = readQueueState();
-          const nextQueue = {
-            ...normalizeQueue(centralQueue),
-            historyDate: new Date().toISOString().slice(0, 10),
-          };
-          const previousQueue = normalizeQueue(currentState[session.sector]);
-          if (JSON.stringify(previousQueue) !== JSON.stringify(nextQueue))
-            saveQueueState({ ...currentState, [session.sector]: nextQueue });
-        })
-        .catch(() => undefined);
-
-    syncCentralQueue();
-    const timer = window.setInterval(syncCentralQueue, 3000);
-    return () => window.clearInterval(timer);
-  }, [session?.sector]);
-
   const sector = session?.sector || "farmacia";
   const current = normalizeQueue(state[sector]);
   const sectorInfo = SECTORS[sector] || SECTORS.farmacia;
 
-  // Função callNext otimizada para o React Compiler
   const callNext = useCallback(
     async (type) => {
       if (calling) return;

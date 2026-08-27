@@ -35,6 +35,30 @@ function subscribeNews(callback) {
   };
 }
 
+function speakQueueNumber(text) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+  playCallAlert();
+  window.speechSynthesis.cancel();
+
+  setTimeout(() => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "pt-BR";
+    utterance.rate = 0.95;
+    utterance.pitch = 1.0;
+
+    const voices = window.speechSynthesis.getVoices();
+    const ptVoice = voices.find(
+      (v) => v.lang.includes("pt-BR") || v.lang.includes("pt_BR") || v.lang.includes("pt")
+    );
+    if (ptVoice) {
+      utterance.voice = ptVoice;
+    }
+
+    window.speechSynthesis.speak(utterance);
+  }, 150);
+}
+
 export default function MonitorPage({ params }) {
   const { sector } = use(params);
   const state = useSyncExternalStore(
@@ -52,33 +76,33 @@ export default function MonitorPage({ params }) {
   const [newsIndex, setNewsIndex] = useState(0);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
 
-  // Função para liberar a voz no navegador da TV com apenas um clique
-  function enableAudio() {
+  useEffect(() => {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      playCallAlert();
-      const testUtterance = new SpeechSynthesisUtterance("Som do monitor ativado.");
-      testUtterance.lang = "pt-BR";
-      window.speechSynthesis.speak(testUtterance);
-      setAudioUnlocked(true);
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
     }
+  }, []);
+
+  function enableAudio() {
+    speakQueueNumber("Som do monitor ativado com sucesso.");
+    setAudioUnlocked(true);
   }
 
-  // Relógio e notícias
+  // Carrega as notícias APENAS UMA VEZ ao entrar (Elimina o consumo de Egress)
   useEffect(() => {
-    const refreshNews = () =>
-      fetch("/api/news")
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (!data?.news) return;
-          newsSnapshot = data.news;
-          window.dispatchEvent(new Event("news-updated"));
-        })
-        .catch(() => undefined);
+    fetch("/api/news")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data?.news) return;
+        newsSnapshot = data.news;
+        window.dispatchEvent(new Event("news-updated"));
+      })
+      .catch(() => undefined);
+  }, []);
 
-    refreshNews();
-    const newsRefreshTimer = setInterval(refreshNews, 10000);
-
+  // Relógio local e carrossel de notícias locais
+  useEffect(() => {
     const clockTimer = setInterval(() => {
       setTime(
         new Intl.DateTimeFormat("pt-BR", {
@@ -94,13 +118,12 @@ export default function MonitorPage({ params }) {
     }, 6000);
 
     return () => {
-      clearInterval(newsRefreshTimer);
       clearInterval(clockTimer);
       clearInterval(newsTimer);
     };
   }, [news.length]);
 
-  // Supabase Realtime (Recebe a chamada do Atendimento 1 e do Atendimento 2)
+  // Supabase Realtime (Notifica a TV sem tráfego HTTP desnecessário)
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
 
@@ -141,18 +164,12 @@ export default function MonitorPage({ params }) {
 
           saveQueueState({ ...previous, [sector]: nextQueue });
 
-          // Toca a campainha e fala a senha na TV
-          playCallAlert();
-          if (typeof window !== "undefined" && "speechSynthesis" in window) {
-            window.speechSynthesis.cancel();
-            const text = `Senha ${formatQueueNumber(
-              call.number_int,
-              callTypeFormatted
-            )}, dirigir-se ao atendimento.`;
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = "pt-BR";
-            window.speechSynthesis.speak(utterance);
-          }
+          const textToSpeak = `Senha ${formatQueueNumber(
+            call.number_int,
+            callTypeFormatted
+          )}, dirigir-se ao atendimento.`;
+          
+          speakQueueNumber(textToSpeak);
         }
       )
       .subscribe();
