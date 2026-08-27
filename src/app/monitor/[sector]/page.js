@@ -35,10 +35,19 @@ function subscribeNews(callback) {
   };
 }
 
+// Disparador de voz resiliente a eventos assíncronos
 function speakQueueNumber(text) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
+  // 1. Toca o alerta de sinalização sonora
   playCallAlert();
+
+  // 2. Destrava o motor da Web Speech API se o navegador o tiver pausado
+  if (window.speechSynthesis.paused) {
+    window.speechSynthesis.resume();
+  }
+
+  // 3. Cancela falas anteriores pendentes para evitar acúmulo em fila
   window.speechSynthesis.cancel();
 
   setTimeout(() => {
@@ -55,8 +64,17 @@ function speakQueueNumber(text) {
       utterance.voice = ptVoice;
     }
 
+    // Mantém a engine ativa durante a reprodução
+    utterance.onend = () => {
+      window.speechSynthesis.cancel();
+    };
+
+    utterance.onerror = () => {
+      window.speechSynthesis.cancel();
+    };
+
     window.speechSynthesis.speak(utterance);
-  }, 150);
+  }, 120);
 }
 
 export default function MonitorPage({ params }) {
@@ -76,20 +94,30 @@ export default function MonitorPage({ params }) {
   const [newsIndex, setNewsIndex] = useState(0);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
 
+  // Inicializa o carregamento de vozes e o Keep-Alive da fala
   useEffect(() => {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.onvoiceschanged = () => {
-        window.speechSynthesis.getVoices();
-      };
-    }
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    const loadVoices = () => window.speechSynthesis.getVoices();
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    // Loop de prevenção para manter o manipulador de voz acordado
+    const keepAliveTimer = setInterval(() => {
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.pause();
+        window.speechSynthesis.resume();
+      }
+    }, 5000);
+
+    return () => clearInterval(keepAliveTimer);
   }, []);
 
   function enableAudio() {
-    speakQueueNumber("Som do monitor ativado com sucesso.");
+    speakQueueNumber("Som do monitor ativado.");
     setAudioUnlocked(true);
   }
 
-  // Carrega as notícias APENAS UMA VEZ ao entrar (Elimina o consumo de Egress)
   useEffect(() => {
     fetch("/api/news")
       .then((res) => (res.ok ? res.json() : null))
@@ -101,7 +129,6 @@ export default function MonitorPage({ params }) {
       .catch(() => undefined);
   }, []);
 
-  // Relógio local e carrossel de notícias locais
   useEffect(() => {
     const clockTimer = setInterval(() => {
       setTime(
@@ -123,7 +150,7 @@ export default function MonitorPage({ params }) {
     };
   }, [news.length]);
 
-  // Supabase Realtime (Notifica a TV sem tráfego HTTP desnecessário)
+  // Escuta no Supabase Realtime (Dispara para qualquer atendimento)
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
 
@@ -139,6 +166,8 @@ export default function MonitorPage({ params }) {
         },
         (payload) => {
           const call = payload.new;
+          if (!call || !call.number_int) return;
+
           const previous = getQueueSnapshot();
           const queue = previous[sector] || {};
           const field =
@@ -156,7 +185,7 @@ export default function MonitorPage({ params }) {
                 time: new Intl.DateTimeFormat("pt-BR", {
                   hour: "2-digit",
                   minute: "2-digit",
-                }).format(new Date(call.created_at)),
+                }).format(new Date(call.created_at || Date.now())),
               },
               ...(queue.history || []),
             ].slice(0, 8),
@@ -168,7 +197,7 @@ export default function MonitorPage({ params }) {
             call.number_int,
             callTypeFormatted
           )}, dirigir-se ao atendimento.`;
-          
+
           speakQueueNumber(textToSpeak);
         }
       )
@@ -194,9 +223,9 @@ export default function MonitorPage({ params }) {
           <strong>CENTRAL DE ATENDIMENTO</strong>
         </div>
         <div className={styles.headerMeta}>
-          <button 
+          <button
             type="button"
-            onClick={enableAudio} 
+            onClick={enableAudio}
             style={{
               background: audioUnlocked ? "#10b981" : "#ef4444",
               color: "#fff",
@@ -209,7 +238,7 @@ export default function MonitorPage({ params }) {
               display: "inline-flex",
               alignItems: "center",
               gap: "4px",
-              marginBottom: "4px"
+              marginBottom: "4px",
             }}
           >
             {audioUnlocked ? <Volume2 size={14} /> : <VolumeX size={14} />}
