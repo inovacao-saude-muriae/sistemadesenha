@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
-import { Clock3, Volume2, VolumeX } from "lucide-react";
+import { Clock3 } from "lucide-react";
 import {
   formatQueueNumber,
   getQueueSnapshot,
@@ -35,7 +35,7 @@ function subscribeNews(callback) {
   };
 }
 
-// Reprodução isolada e garantida da voz
+// Reprodução automática da voz
 function speakText(text) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
@@ -43,7 +43,7 @@ function speakText(text) {
     try {
       playCallAlert();
     } catch {
-      // Ignora erro do bipe para não interromper a fala
+      // Ignora erro do bipe para não interromper a voz
     }
 
     if (window.speechSynthesis.paused) {
@@ -70,7 +70,6 @@ function speakText(text) {
 }
 
 export default function MonitorPage({ params }) {
-  // Tratamento seguro para desembrulhar os parâmetros sem quebrar o React
   const resolvedParams = params ? (params.then ? use(params) : params) : {};
   const sector = resolvedParams?.sector || "farmacia";
 
@@ -87,7 +86,6 @@ export default function MonitorPage({ params }) {
 
   const [time, setTime] = useState("");
   const [newsIndex, setNewsIndex] = useState(0);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -97,11 +95,6 @@ export default function MonitorPage({ params }) {
       };
     }
   }, []);
-
-  function enableAudio() {
-    speakText("Som do monitor ativado.");
-    setAudioUnlocked(true);
-  }
 
   // Notícias
   useEffect(() => {
@@ -137,7 +130,7 @@ export default function MonitorPage({ params }) {
     };
   }, [news?.length]);
 
-  // Supabase Realtime (Inscrição Híbrida)
+  // Supabase Realtime
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !sector) return;
 
@@ -222,34 +215,13 @@ export default function MonitorPage({ params }) {
   };
 
   return (
-    <main className={styles.monitor} onClick={enableAudio}>
+    <main className={styles.monitor}>
       <header className={styles.header}>
         <div className={styles.sectorTitle}>{info.name.toUpperCase()}</div>
         <div className={styles.heading}>
           <strong>CENTRAL DE ATENDIMENTO</strong>
         </div>
         <div className={styles.headerMeta}>
-          <button
-            type="button"
-            onClick={enableAudio}
-            style={{
-              background: audioUnlocked ? "#10b981" : "#ef4444",
-              color: "#fff",
-              border: "none",
-              borderRadius: "4px",
-              padding: "4px 8px",
-              cursor: "pointer",
-              fontSize: "12px",
-              fontWeight: "bold",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              marginBottom: "4px",
-            }}
-          >
-            {audioUnlocked ? <Volume2 size={14} /> : <VolumeX size={14} />}
-            {audioUnlocked ? "Som Ativado" : "Clique p/ Ativar Som"}
-          </button>
           <div className={styles.clock}>
             <Clock3 size={18} />
             {time}
