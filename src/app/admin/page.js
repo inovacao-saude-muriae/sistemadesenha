@@ -404,10 +404,10 @@ export default function AdminPage() {
               <div className={styles.historyList}>
                 {stats.recent?.map((item, index) => (
                   <div key={`${item.created_at}-${index}`}>
-                    <strong>{item.number}</strong>
+                    <strong>{item.number_str}</strong>
                     <span>{SECTORS[item.sector]?.name || item.sector}</span>
                     <span>
-                      {item.type === "preferencial" ? "Preferencial" : "Normal"}
+                      {item.type === "preferential" ? "Preferencial" : "Normal"}
                     </span>
                     <time>
                       {new Intl.DateTimeFormat("pt-BR", {

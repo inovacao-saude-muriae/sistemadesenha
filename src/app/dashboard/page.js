@@ -31,7 +31,6 @@ import {
   subscribeSession,
   withQueueLock,
 } from "../../lib/queue";
-import { callQueueAtomic } from "../../lib/supabase";
 import styles from "./Dashboard.module.css";
 
 export default function DashboardPage() {
@@ -93,12 +92,25 @@ export default function DashboardPage() {
         type === "preferencial" ? "priorityCurrent" : "normalCurrent";
       let next;
       try {
-        next = await callQueueAtomic(sector, type);
+        const response = await fetch("/api/queue/call", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sector,
+            type,
+            attendantId: session?.id || null,
+          }),
+        });
+        const data = await response.json();
+        next = response.ok ? data.number : null;
       } catch {
         next = null;
       }
-      if (!Number.isInteger(next) || next < 1 || next > 1000)
-        next = nextQueueNumber(latest[field]);
+      if (!Number.isInteger(next) || next < 1 || next > 1000) {
+        setNotice("Não foi possível conectar à sequência central.");
+        setCalling(false);
+        return;
+      }
       const updated = {
         ...latestState,
         [sector]: {

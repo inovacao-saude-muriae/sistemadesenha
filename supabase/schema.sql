@@ -24,15 +24,26 @@ create table if not exists public.queues (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.queue_sequences (
+  sector_id text not null references public.sectors(id),
+  call_type text not null check (call_type in ('normal', 'preferencial')),
+  current_number integer not null default 0 check (current_number between 0 and 1000),
+  updated_at timestamptz not null default now(),
+  primary key (sector_id, call_type)
+);
+
+/* O banco atual usa public.queue_calls com number_str, number_int, type e called_by. */
+/* A criação dessa tabela é mantida compatível com instalações novas baseadas no schema Prisma. */
 create table if not exists public.queue_calls (
   id bigint generated always as identity primary key,
   sector_id text not null references public.sectors(id),
-  number integer not null check (number between 1 and 1000),
-  call_type text not null check (call_type in ('normal', 'preferencial')),
-  status text not null default 'called' check (status in ('called', 'served', 'cancelled')),
-  attendant_id uuid not null references auth.users(id),
+  number_str varchar(4) not null,
+  number_int integer not null check (number_int between 1 and 1000),
+  type text not null check (type in ('normal', 'preferential')),
+  called_by uuid references auth.users(id),
   created_at timestamptz not null default now()
 );
+
 
 create table if not exists public.settings (
   user_id uuid primary key references auth.users(id) on delete cascade,
@@ -51,6 +62,9 @@ insert into storage.buckets (id, name, public) values ('news-images', 'news-imag
 
 insert into public.sectors (id, name) values ('farmacia', 'Farmácia'), ('recepcao', 'Recepção Saúde') on conflict (id) do nothing;
 insert into public.queues (sector_id) values ('farmacia'), ('recepcao') on conflict (sector_id) do nothing;
+insert into public.queue_sequences (sector_id, call_type)
+select sector_id, call_type from public.sectors cross join (values ('normal'), ('preferencial')) as types(call_type)
+on conflict (sector_id, call_type) do nothing;
 
 create index if not exists queue_calls_sector_created_idx on public.queue_calls (sector_id, created_at desc);
 create index if not exists queue_calls_status_idx on public.queue_calls (status);

@@ -9,8 +9,8 @@ export async function GET(request) {
     const [summary, bySector, byType, recent] = await Promise.all([
       prisma.$queryRaw`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)::int AS today FROM public.queue_calls WHERE created_at >= CURRENT_DATE - (${days} * INTERVAL '1 day')`,
       prisma.$queryRaw`SELECT sector_id AS sector, COUNT(*)::int AS total FROM public.queue_calls WHERE created_at >= CURRENT_DATE - (${days} * INTERVAL '1 day') GROUP BY sector_id ORDER BY total DESC`,
-      prisma.$queryRaw`SELECT call_type AS type, COUNT(*)::int AS total FROM public.queue_calls WHERE created_at >= CURRENT_DATE - (${days} * INTERVAL '1 day') GROUP BY call_type ORDER BY total DESC`,
-      prisma.$queryRaw`SELECT sector_id AS sector, number, call_type AS type, created_at FROM public.queue_calls ORDER BY created_at DESC LIMIT 10`,
+      prisma.$queryRaw`SELECT type, COUNT(*)::int AS total FROM public.queue_calls WHERE created_at >= CURRENT_DATE - (${days} * INTERVAL '1 day') GROUP BY type ORDER BY total DESC`,
+      prisma.$queryRaw`SELECT sector_id AS sector, number_str, type, created_at FROM public.queue_calls ORDER BY created_at DESC LIMIT 10`,
     ]);
     return Response.json({
       days,

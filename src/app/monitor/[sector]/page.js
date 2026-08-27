@@ -109,16 +109,14 @@ export default function MonitorPage({ params }) {
           const previous = getQueueSnapshot();
           const queue = previous[sector] || {};
           const field =
-            call.call_type === "preferencial"
-              ? "priorityCurrent"
-              : "normalCurrent";
+            call.type === "preferential" ? "priorityCurrent" : "normalCurrent";
           const nextQueue = {
             ...queue,
             [field]: call.number,
             history: [
               {
-                number: call.number,
-                type: call.call_type,
+                number: call.number_int,
+                type: call.type === "preferential" ? "preferencial" : "normal",
                 time: new Intl.DateTimeFormat("pt-BR", {
                   hour: "2-digit",
                   minute: "2-digit",
