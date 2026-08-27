@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
-import { Clock3 } from "lucide-react";
+import { Clock3, Volume2, VolumeX } from "lucide-react";
 import {
   formatQueueNumber,
   getQueueSnapshot,
@@ -50,8 +50,21 @@ export default function MonitorPage({ params }) {
 
   const [time, setTime] = useState("");
   const [newsIndex, setNewsIndex] = useState(0);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
 
-  // 1. Relógio e Carrossel de Notícias
+  // Função para liberar a voz no navegador da TV com apenas um clique
+  function enableAudio() {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      playCallAlert();
+      const testUtterance = new SpeechSynthesisUtterance("Som do monitor ativado.");
+      testUtterance.lang = "pt-BR";
+      window.speechSynthesis.speak(testUtterance);
+      setAudioUnlocked(true);
+    }
+  }
+
+  // Relógio e notícias
   useEffect(() => {
     const refreshNews = () =>
       fetch("/api/news")
@@ -87,7 +100,7 @@ export default function MonitorPage({ params }) {
     };
   }, [news.length]);
 
-  // 2. Supabase Realtime (Chamadas de Senha Instantâneas)
+  // Supabase Realtime (Recebe a chamada do Atendimento 1 e do Atendimento 2)
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
 
@@ -107,7 +120,6 @@ export default function MonitorPage({ params }) {
           const queue = previous[sector] || {};
           const field =
             call.type === "preferential" ? "priorityCurrent" : "normalCurrent";
-
           const callTypeFormatted =
             call.type === "preferential" ? "preferencial" : "normal";
 
@@ -127,18 +139,19 @@ export default function MonitorPage({ params }) {
             ].slice(0, 8),
           };
 
-          // Salva e notifica a aplicação em tempo real
           saveQueueState({ ...previous, [sector]: nextQueue });
 
-          // Som de Alerta e Leitura por Voz Instantâneos
+          // Toca a campainha e fala a senha na TV
           playCallAlert();
-          if ("speechSynthesis" in window) {
-            window.speechSynthesis.cancel(); // Limpa chamadas anteriores
+          if (typeof window !== "undefined" && "speechSynthesis" in window) {
+            window.speechSynthesis.cancel();
             const text = `Senha ${formatQueueNumber(
               call.number_int,
               callTypeFormatted
             )}, dirigir-se ao atendimento.`;
-            window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = "pt-BR";
+            window.speechSynthesis.speak(utterance);
           }
         }
       )
@@ -157,13 +170,34 @@ export default function MonitorPage({ params }) {
   };
 
   return (
-    <main className={styles.monitor}>
+    <main className={styles.monitor} onClick={enableAudio}>
       <header className={styles.header}>
         <div className={styles.sectorTitle}>{info.name.toUpperCase()}</div>
         <div className={styles.heading}>
           <strong>CENTRAL DE ATENDIMENTO</strong>
         </div>
         <div className={styles.headerMeta}>
+          <button 
+            type="button"
+            onClick={enableAudio} 
+            style={{
+              background: audioUnlocked ? "#10b981" : "#ef4444",
+              color: "#fff",
+              border: "none",
+              borderRadius: "4px",
+              padding: "4px 8px",
+              cursor: "pointer",
+              fontSize: "12px",
+              fontWeight: "bold",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              marginBottom: "4px"
+            }}
+          >
+            {audioUnlocked ? <Volume2 size={14} /> : <VolumeX size={14} />}
+            {audioUnlocked ? "Som Ativado" : "Clique p/ Ativar Som"}
+          </button>
           <div className={styles.clock}>
             <Clock3 size={18} />
             {time}
