@@ -1,5 +1,5 @@
-import { prisma } from "../../../../../lib/prisma-client";
-import { isSupabaseConfigured, supabase } from "../../../../../lib/supabase";
+import { prisma } from "@/lib/prisma-client";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 const validSectors = ["farmacia", "recepcao"];
 const validTypes = ["normal", "preferencial"];
