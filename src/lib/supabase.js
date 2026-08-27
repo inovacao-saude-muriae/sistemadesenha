@@ -7,12 +7,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Atenção: Variáveis de ambiente do Supabase não encontradas no arquivo .env');
 }
 
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
-
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+export const supabase = isSupabaseConfigured ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 export async function callQueueAtomic(sectorId, callType) {
-  if (!isSupabaseConfigured) return null;
+  if (!isSupabaseConfigured || !supabase) return null;
   const { data, error } = await supabase.rpc('call_queue', { p_sector_id: sectorId, p_call_type: callType });
   if (error) throw error;
   const result = typeof data === 'object' && data !== null ? data : { number: data };
