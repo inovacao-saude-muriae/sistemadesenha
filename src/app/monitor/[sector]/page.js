@@ -100,11 +100,13 @@ export default function MonitorPage({ params }) {
         .then((centralQueue) => {
           if (!centralQueue) return;
           const currentState = getQueueSnapshot();
-          saveQueueState({ ...currentState, [sector]: centralQueue });
+          const previousQueue = currentState[sector] || {};
+          if (JSON.stringify(previousQueue) !== JSON.stringify(centralQueue))
+            saveQueueState({ ...currentState, [sector]: centralQueue });
         })
         .catch(() => undefined);
     syncCentralQueue();
-    const queueRefreshTimer = window.setInterval(syncCentralQueue, 2000);
+    const queueRefreshTimer = window.setInterval(syncCentralQueue, 3000);
     return () => window.clearInterval(queueRefreshTimer);
   }, [sector]);
 

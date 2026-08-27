@@ -8,10 +8,23 @@ export async function GET(request) {
   if (!validSectors.includes(sector))
     return Response.json({ error: "Serviço inválido." }, { status: 400 });
   try {
-    const sequences =
-      await prisma.$queryRaw`SELECT call_type, current_number FROM public.queue_sequences WHERE sector_id = ${sector}`;
-    const calls =
-      await prisma.$queryRaw`SELECT number_int, type, created_at FROM public.queue_calls WHERE sector_id = ${sector} ORDER BY created_at DESC LIMIT 8`;
+    const [snapshot] = await prisma.$queryRaw`
+      SELECT
+        COALESCE((SELECT jsonb_agg(sequence_row) FROM (
+          SELECT call_type, current_number
+          FROM public.queue_sequences
+          WHERE sector_id = ${sector}
+        ) AS sequence_row), '[]'::jsonb) AS sequences,
+        COALESCE((SELECT jsonb_agg(call_row) FROM (
+          SELECT number_int, type, created_at
+          FROM public.queue_calls
+          WHERE sector_id = ${sector}
+          ORDER BY created_at DESC
+          LIMIT 8
+        ) AS call_row), '[]'::jsonb) AS calls
+    `;
+    const sequences = snapshot.sequences;
+    const calls = snapshot.calls;
     const current = { normalCurrent: 0, priorityCurrent: 0 };
     for (const sequence of sequences)
       current[

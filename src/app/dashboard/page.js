@@ -86,17 +86,17 @@ export default function DashboardPage() {
         .then((centralQueue) => {
           if (!centralQueue) return;
           const currentState = readQueueState();
-          saveQueueState({
-            ...currentState,
-            [session.sector]: {
-              ...normalizeQueue(centralQueue),
-              historyDate: new Date().toISOString().slice(0, 10),
-            },
-          });
+          const nextQueue = {
+            ...normalizeQueue(centralQueue),
+            historyDate: new Date().toISOString().slice(0, 10),
+          };
+          const previousQueue = normalizeQueue(currentState[session.sector]);
+          if (JSON.stringify(previousQueue) !== JSON.stringify(nextQueue))
+            saveQueueState({ ...currentState, [session.sector]: nextQueue });
         })
         .catch(() => undefined);
     syncCentralQueue();
-    const timer = window.setInterval(syncCentralQueue, 2000);
+    const timer = window.setInterval(syncCentralQueue, 3000);
     return () => window.clearInterval(timer);
   }, [session?.sector]);
 
