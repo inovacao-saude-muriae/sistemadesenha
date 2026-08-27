@@ -40,14 +40,12 @@ function speakText(text) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
   try {
-    // 1. Toca o alerta sonoro (se falhar, não trava a voz)
     try {
       playCallAlert();
     } catch {
       // Ignora erro do bipe para não interromper a fala
     }
 
-    // 2. Destrava motor de voz do navegador
     if (window.speechSynthesis.paused) {
       window.speechSynthesis.resume();
     }
@@ -72,7 +70,10 @@ function speakText(text) {
 }
 
 export default function MonitorPage({ params }) {
-  const { sector } = use(params);
+  // Tratamento seguro para desembrulhar os parâmetros sem quebrar o React
+  const resolvedParams = params ? (params.then ? use(params) : params) : {};
+  const sector = resolvedParams?.sector || "farmacia";
+
   const state = useSyncExternalStore(
     subscribeQueue,
     getQueueSnapshot,
@@ -127,21 +128,21 @@ export default function MonitorPage({ params }) {
     }, 1000);
 
     const newsTimer = setInterval(() => {
-      setNewsIndex((index) => (news.length ? (index + 1) % news.length : 0));
+      setNewsIndex((index) => (news?.length ? (index + 1) % news.length : 0));
     }, 6000);
 
     return () => {
       clearInterval(clockTimer);
       clearInterval(newsTimer);
     };
-  }, [news.length]);
+  }, [news?.length]);
 
-  // Supabase Realtime (Inscrição Híbrida: Postgres Changes + Broadcast Direct)
+  // Supabase Realtime (Inscrição Híbrida)
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) return;
+    if (!isSupabaseConfigured || !supabase || !sector) return;
 
     const processCall = (numberInt, typeStr, createdAt) => {
-      const previous = getQueueSnapshot();
+      const previous = getQueueSnapshot() || monitorServerSnapshot;
       const queue = previous[sector] || {};
       const callTypeFormatted =
         typeStr === "preferential" || typeStr === "preferencial"
@@ -178,7 +179,6 @@ export default function MonitorPage({ params }) {
 
     const channel = supabase
       .channel(`realtime-monitor-${sector}`)
-      // Escuta 1: Alteração no Banco de Dados
       .on(
         "postgres_changes",
         {
@@ -197,7 +197,6 @@ export default function MonitorPage({ params }) {
           }
         }
       )
-      // Escuta 2: Broadcast Direto da API (Garante recebimento caso o RLS bloqueie)
       .on("broadcast", { event: "new_call" }, (response) => {
         if (response?.payload?.number_int) {
           processCall(
@@ -215,8 +214,9 @@ export default function MonitorPage({ params }) {
   }, [sector]);
 
   const info = SECTORS[sector] || SECTORS.farmacia;
-  const current = state[sector] || state.farmacia;
-  const latest = current.history[0] || {
+  const current = state[sector] || state.farmacia || { normalCurrent: 0, history: [] };
+  const historyList = current.history || [];
+  const latest = historyList[0] || {
     number: current.normalCurrent || 0,
     type: "normal",
   };
@@ -286,7 +286,7 @@ export default function MonitorPage({ params }) {
 
           <section className={styles.recent}>
             <p className={styles.kicker}>ÚLTIMAS SENHAS</p>
-            {current.history.slice(0, 4).map((item, index) => (
+            {historyList.slice(0, 4).map((item, index) => (
               <div
                 className={styles.historyItem}
                 key={`${item.number}-${item.time}-${index}`}
@@ -318,21 +318,23 @@ export default function MonitorPage({ params }) {
         </section>
 
         <section className={styles.news}>
-          {news.length ? (
+          {news?.length ? (
             <>
-              <Image
-                src={news[newsIndex]?.image}
-                alt=""
-                fill
-                unoptimized
-                sizes="(max-width: 900px) 100vw, 60vw"
-              />
+              {news[newsIndex]?.image && (
+                <Image
+                  src={news[newsIndex].image}
+                  alt=""
+                  fill
+                  unoptimized
+                  sizes="(max-width: 900px) 100vw, 60vw"
+                />
+              )}
               <div className={styles.newsCaption}>
                 <div className={styles.dots}>
                   {news.map((item, index) => (
                     <i
                       className={index === newsIndex ? styles.activeDot : ""}
-                      key={item.title + index}
+                      key={(item.title || index) + index}
                     />
                   ))}
                 </div>
