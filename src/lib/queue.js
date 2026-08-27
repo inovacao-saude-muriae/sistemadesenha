@@ -2,6 +2,7 @@ export const SECTORS = {
   farmacia: { id: "farmacia", name: "Farmácia", shortName: "FARMÁCIA" },
   recepcao: { id: "recepcao", name: "Recepção Saúde", shortName: "RECEPÇÃO" },
 };
+
 export const GUICHES = [
   { id: "none", name: "Sem guichê" },
   { id: "guiche-1", name: "Guichê 1" },
@@ -12,6 +13,7 @@ export const GUICHES = [
 
 export const QUEUE_KEY = "saude-queue-state";
 export const SESSION_KEY = "saude-attendant-session";
+
 const serverQueueSnapshot = {
   farmacia: {
     normalCurrent: 0,
@@ -26,11 +28,13 @@ const serverQueueSnapshot = {
     historyDate: "",
   },
 };
+
 let clientQueueSnapshot = null;
 let clientQueueRaw = null;
 let clientSessionSnapshot = null;
 let clientSessionRaw = null;
 
+// CONTAS ÚNICAS E OFICIAIS PERMITIDAS NO SISTEMA
 export const ATTENDANT_ACCOUNTS = {
   admin: {
     name: "Administradora",
@@ -38,47 +42,19 @@ export const ATTENDANT_ACCOUNTS = {
     role: "admin",
     password: "admin123",
   },
-  "recepcao-atendimento": {
-    name: "Recepção Atendimento",
-    initials: "RA",
+  "recepcao.atendimento": {
+    name: "Atendimento Recepção",
+    initials: "RC",
     sector: "recepcao",
     accessLevel: 1,
     password: "recepcao123",
   },
-  "recepcao-atendimento1": {
-    name: "Recepção Atendimento Principal",
-    initials: "R1",
-    sector: "recepcao",
-    accessLevel: 1,
-    password: "recepcao123",
-  },
-  "recepcao-atendimento2": {
-    name: "Recepção Atendimento 2",
-    initials: "R2",
-    sector: "recepcao",
-    accessLevel: 2,
-    password: "recepcao2123",
-  },
-  "farmacia-atendimento": {
-    name: "Farmácia Atendimento",
-    initials: "FA",
+  "farmacia.atendimento": {
+    name: "Atendimento Farmácia",
+    initials: "FM",
     sector: "farmacia",
     accessLevel: 1,
     password: "farmacia123",
-  },
-  "farmacia-atendimento1": {
-    name: "Farmácia Atendimento Principal",
-    initials: "F1",
-    sector: "farmacia",
-    accessLevel: 1,
-    password: "farmacia123",
-  },
-  "farmacia-atendimento2": {
-    name: "Farmácia Atendimento 2",
-    initials: "F2",
-    sector: "farmacia",
-    accessLevel: 2,
-    password: "farmacia2123",
   },
 };
 
@@ -132,7 +108,7 @@ function clearHistoryFromNewDay(state) {
           historyDate: today,
         },
       ];
-    }),
+    })
   );
   if (changed && typeof window !== "undefined")
     window.localStorage.setItem(QUEUE_KEY, JSON.stringify(nextState));
@@ -144,7 +120,7 @@ export function readQueueState() {
   try {
     const saved = window.localStorage.getItem(QUEUE_KEY);
     return clearHistoryFromNewDay(
-      saved ? JSON.parse(saved) : getInitialState(),
+      saved ? JSON.parse(saved) : getInitialState()
     );
   } catch {
     return getInitialState();
@@ -179,7 +155,7 @@ export async function withQueueLock(callback) {
     return navigator.locks.request(
       "saude-queue-call",
       { mode: "exclusive" },
-      callback,
+      callback
     );
   const lockKey = `${QUEUE_KEY}-lock`;
   const token = `${Date.now()}-${Math.random()}`;
@@ -236,13 +212,16 @@ export function getQueueSnapshot() {
   clientQueueSnapshot = readQueueState();
   return clientQueueSnapshot;
 }
+
 export function getServerQueueSnapshot() {
   return serverQueueSnapshot;
 }
+
 export function subscribeSession(callback) {
   window.addEventListener("storage", callback);
   return () => window.removeEventListener("storage", callback);
 }
+
 export function getSessionSnapshot() {
   const raw = window.localStorage.getItem(SESSION_KEY);
   if (raw === clientSessionRaw) return clientSessionSnapshot;
@@ -250,6 +229,7 @@ export function getSessionSnapshot() {
   clientSessionSnapshot = readSession();
   return clientSessionSnapshot;
 }
+
 export function getServerSessionSnapshot() {
   return null;
 }

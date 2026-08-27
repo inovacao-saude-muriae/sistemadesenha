@@ -29,13 +29,16 @@ import styles from "./Admin.module.css";
 
 let newsCache = [];
 const serverNewsSnapshot = [];
+
 function getNewsSnapshot() {
   if (typeof window === "undefined") return serverNewsSnapshot;
   return newsCache;
 }
+
 function getServerNewsSnapshot() {
   return serverNewsSnapshot;
 }
+
 function subscribeNews(callback) {
   window.addEventListener("storage", callback);
   window.addEventListener("news-updated", callback);
@@ -50,14 +53,15 @@ export default function AdminPage() {
   const session = useSyncExternalStore(
     subscribeSession,
     getSessionSnapshot,
-    getServerSessionSnapshot,
+    getServerSessionSnapshot
   );
   const [state, setState] = useState(getServerQueueSnapshot);
   const news = useSyncExternalStore(
     subscribeNews,
     getNewsSnapshot,
-    getServerNewsSnapshot,
+    getServerNewsSnapshot
   );
+
   const [title, setTitle] = useState("");
   const [image, setImage] = useState("");
   const [user, setUser] = useState({
@@ -73,10 +77,13 @@ export default function AdminPage() {
   const [savingNews, setSavingNews] = useState(false);
   const [, refreshNews] = useState(0);
 
+  // Redirecionamento de segurança caso não seja Admin
   useEffect(() => {
     const current = getSessionSnapshot();
     if (!current || current.role !== "admin") router.push("/login");
   }, [router]);
+
+  // Carrega lista inicial de notícias da API
   useEffect(() => {
     fetch("/api/news")
       .then((response) => (response.ok ? response.json() : null))
@@ -89,49 +96,72 @@ export default function AdminPage() {
       })
       .catch(() => undefined);
   }, []);
+
+  // Carrega estatísticas do sistema
   useEffect(() => {
     fetch("/api/stats?days=30")
       .then((response) => (response.ok ? response.json() : null))
       .then(setStats)
       .catch(() => undefined);
   }, []);
+
   if (!session) return null;
 
-  function reset(sector) {
-    const next = {
-      ...state,
-      [sector]: {
-        ...normalizeQueue(state[sector]),
-        normalCurrent: 0,
-        priorityCurrent: 0,
-        history: [],
-      },
-    };
-    setState(next);
-    saveQueueState(next);
+  // Reseta os contadores do dia (Local e no Banco de Dados)
+  async function reset(sectorId) {
+    if (!window.confirm(`Tem certeza que deseja zerar a fila do setor ${SECTORS[sectorId]?.name || sectorId}?`)) {
+      return;
+    }
+
+    try {
+      // Zera o estado local
+      const next = {
+        ...state,
+        [sectorId]: {
+          ...normalizeQueue(state[sectorId]),
+          normalCurrent: 0,
+          priorityCurrent: 0,
+          history: [],
+        },
+      };
+      setState(next);
+      saveQueueState(next);
+
+      // Envia comando para zerar a sequência no Banco de Dados (Supabase)
+      await fetch("/api/queue/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sector: sectorId }),
+      });
+
+      setMessage(`Contador do setor ${SECTORS[sectorId]?.name} zerado com sucesso.`);
+    } catch {
+      setMessage("Ocorreu um erro ao zerar o contador no banco de dados.");
+    }
   }
+
   function addNews(event) {
     event.preventDefault();
     if (!title || !image) return;
     setDraftNews([{ id: `draft-${Date.now()}`, title, image }, ...draftNews]);
     setTitle("");
     setImage("");
-    setMessage("Alteração pendente. Clique em Salvar notícias para publicar.");
+    setMessage("Alteração pendente. Clique em 'Salvar notícias' para publicar.");
   }
+
   async function saveNews() {
     setSavingNews(true);
     setMessage("");
     try {
       const removed = news.filter(
-        (item) =>
-          !draftNews.some((draft) => String(draft.id) === String(item.id)),
+        (item) => !draftNews.some((draft) => String(draft.id) === String(item.id))
       );
-      for (const item of removed)
+      for (const item of removed) {
         await fetch(`/api/news?id=${item.id}`, { method: "DELETE" });
+      }
+
       const created = [];
-      for (const item of draftNews.filter((item) =>
-        String(item.id).startsWith("draft-"),
-      )) {
+      for (const item of draftNews.filter((item) => String(item.id).startsWith("draft-"))) {
         const response = await fetch("/api/news", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -141,22 +171,24 @@ export default function AdminPage() {
         if (!response.ok) throw new Error(data.error);
         created.push(data.news);
       }
+
       const response = await fetch("/api/news");
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
+
       newsCache.splice(0, newsCache.length, ...data.news);
       setDraftNews(data.news);
       refreshNews((version) => version + 1);
       window.dispatchEvent(new Event("news-updated"));
-      setMessage(
-        `${created.length} notícia(s) publicada(s) e alterações salvas.`,
-      );
+
+      setMessage(`${created.length} notícia(s) salva(s) com sucesso.`);
     } catch (error) {
       setMessage(error.message || "Não foi possível salvar as notícias.");
     } finally {
       setSavingNews(false);
     }
   }
+
   async function addUser(event) {
     event.preventDefault();
     setMessage("");
@@ -168,18 +200,19 @@ export default function AdminPage() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      setUser({ name: "", login: "", password: "", sector: "farmacia" });
-      setMessage(
-        `Usuário ${data.login} criado para ${SECTORS[data.sector].name}.`,
-      );
+
+      setUser({ name: "", login: "", password: "", sector: "farmacia", guiche: "none" });
+      setMessage(`Usuário ${data.login} criado para ${SECTORS[data.sector]?.name || data.sector}.`);
     } catch (error) {
       setMessage(error.message || "Não foi possível criar o usuário.");
     }
   }
-  async function deleteNews(id) {
+
+  function deleteNews(id) {
     setDraftNews(draftNews.filter((item) => String(item.id) !== String(id)));
-    setMessage("Exclusão pendente. Clique em Salvar notícias para confirmar.");
+    setMessage("Exclusão pendente. Clique em 'Salvar notícias' para confirmar.");
   }
+
   function readImage(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -201,17 +234,20 @@ export default function AdminPage() {
           <LogOut size={16} /> Sair
         </Link>
       </header>
+
       <section className={styles.content}>
         <div className={styles.intro}>
           <div>
             <p>CONTROLE CENTRAL</p>
             <h1>Administração</h1>
             <span>
-              Gerencie as duas unidades, usuários e notícias exibidas nos
-              monitores.
+              Gerencie as unidades de atendimento, novos usuários e as notícias do monitor.
             </span>
           </div>
         </div>
+
+        {message && <div className={styles.alertBox}>{message}</div>}
+
         <section className={styles.section}>
           <div className={styles.sectionTitle}>
             <div>
@@ -228,15 +264,14 @@ export default function AdminPage() {
                     <strong>{item.name}</strong>
                     <small>
                       Normal: N{String(queue.normalCurrent).padStart(3, "0")} ·
-                      Preferencial: P
-                      {String(queue.priorityCurrent).padStart(3, "0")}
+                      Preferencial: P{String(queue.priorityCurrent).padStart(3, "0")}
                     </small>
                   </div>
                   <div className={styles.cardActions}>
                     <Link href={`/monitor/${item.id}`}>
                       <Monitor size={16} /> Monitor
                     </Link>
-                    <button onClick={() => reset(item.id)}>
+                    <button type="button" onClick={() => reset(item.id)}>
                       <RotateCcw size={16} /> Limpar dia
                     </button>
                   </div>
@@ -245,6 +280,7 @@ export default function AdminPage() {
             })}
           </div>
         </section>
+
         <section className={styles.section}>
           <div className={styles.sectionTitle}>
             <div>
@@ -266,8 +302,8 @@ export default function AdminPage() {
               onChange={(event) =>
                 setUser({ ...user, login: event.target.value })
               }
-              placeholder="Login (ex: joao-atendimento)"
-              pattern="[a-zA-Z0-9-]+"
+              placeholder="Login (ex: farmacia.atendimento)"
+              pattern="[a-zA-Z0-9.-]+"
               required
             />
             <input
@@ -301,11 +337,12 @@ export default function AdminPage() {
                 </option>
               ))}
             </select>
-            <button>
+            <button type="submit">
               <UserPlus size={16} /> Criar usuário
             </button>
           </form>
         </section>
+
         <section className={styles.section}>
           <div className={styles.sectionTitle}>
             <div>
@@ -334,6 +371,7 @@ export default function AdminPage() {
               <ImagePlus size={16} /> Adicionar à lista
             </button>
           </form>
+
           <div className={styles.newsGrid}>
             {draftNews.map((item, index) => (
               <article key={`${item.title}-${index}`}>
@@ -355,6 +393,7 @@ export default function AdminPage() {
               </article>
             ))}
           </div>
+
           <button
             className={styles.saveNews}
             type="button"
@@ -364,6 +403,7 @@ export default function AdminPage() {
             <Save size={16} /> {savingNews ? "Salvando..." : "Salvar notícias"}
           </button>
         </section>
+
         <section className={styles.section}>
           <div className={styles.sectionTitle}>
             <div>
@@ -383,6 +423,7 @@ export default function AdminPage() {
               <option value="90">Últimos 90 dias</option>
             </select>
           </div>
+
           {stats ? (
             <>
               <div className={styles.statsGrid}>
@@ -401,13 +442,14 @@ export default function AdminPage() {
                   </article>
                 ))}
               </div>
+
               <div className={styles.historyList}>
                 {stats.recent?.map((item, index) => (
                   <div key={`${item.created_at}-${index}`}>
                     <strong>{item.number_str}</strong>
-                    <span>{SECTORS[item.sector]?.name || item.sector}</span>
+                    <span>{SECTORS[item.sector_id || item.sector]?.name || item.sector_id || item.sector}</span>
                     <span>
-                      {item.type === "preferential" ? "Preferencial" : "Normal"}
+                      {["preferencial", "preferential"].includes(item.type) ? "Preferencial" : "Normal"}
                     </span>
                     <time>
                       {new Intl.DateTimeFormat("pt-BR", {
@@ -423,7 +465,6 @@ export default function AdminPage() {
             <p>Carregando histórico...</p>
           )}
         </section>
-        {message && <p>{message}</p>}
       </section>
     </main>
   );
