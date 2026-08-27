@@ -5,6 +5,12 @@ const validTypes = ["normal", "preferencial"];
 
 export async function POST(request) {
   try {
+    if (!process.env.DATABASE_URL) {
+      return Response.json(
+        { error: "DATABASE_URL não foi configurada na Vercel." },
+        { status: 503 },
+      );
+    }
     const { sector, type, attendantId = null } = await request.json();
     if (!validSectors.includes(sector) || !validTypes.includes(type)) {
       return Response.json(
@@ -12,6 +18,21 @@ export async function POST(request) {
         { status: 400 },
       );
     }
+    await prisma.$executeRaw`
+      CREATE TABLE IF NOT EXISTS public.queue_sequences (
+        sector_id text NOT NULL,
+        call_type text NOT NULL CHECK (call_type IN ('normal', 'preferencial')),
+        current_number integer NOT NULL DEFAULT 0 CHECK (current_number BETWEEN 0 AND 1000),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (sector_id, call_type)
+      )
+    `;
+    await prisma.$executeRaw`
+      INSERT INTO public.queue_sequences (sector_id, call_type)
+      SELECT id, call_type FROM public.sectors
+      CROSS JOIN (VALUES ('normal'), ('preferencial')) AS types(call_type)
+      ON CONFLICT (sector_id, call_type) DO NOTHING
+    `;
     const rows = await prisma.$queryRaw`
       UPDATE public.queue_sequences
       SET current_number = CASE WHEN current_number >= 1000 THEN 1 ELSE current_number + 1 END,
@@ -34,7 +55,9 @@ export async function POST(request) {
     return Response.json({ number });
   } catch (error) {
     return Response.json(
-      { error: error.message || "Não foi possível chamar a senha." },
+      {
+        error: `Falha no banco ao chamar a senha: ${error.message || "erro desconhecido"}`,
+      },
       { status: 503 },
     );
   }
