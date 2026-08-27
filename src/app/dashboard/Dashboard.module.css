@@ -271,7 +271,8 @@
   border-radius: 5px;
 }
 .normalButton,
-.priorityButton {
+.priorityButton,
+.recallButton {
   width: 100%;
   border: 0;
   border-radius: 8px;
@@ -285,7 +286,8 @@
     filter 0.2s;
 }
 .normalButton:hover,
-.priorityButton:hover {
+.priorityButton:hover,
+.recallButton:hover {
   transform: translateY(-2px);
   filter: brightness(1.05);
 }
@@ -295,6 +297,16 @@
 .priorityButton {
   background: #e89a32;
   margin-top: 12px;
+}
+.recallButton {
+  background: #2563eb;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 13px;
 }
 .normalButton span,
 .priorityButton span {

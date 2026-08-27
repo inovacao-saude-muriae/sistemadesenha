@@ -11,8 +11,6 @@ import {
   Monitor,
   RotateCcw,
   Settings2,
-  Volume2,
-  VolumeX,
 } from "lucide-react";
 import {
   formatQueueNumber,
@@ -46,7 +44,6 @@ export default function DashboardPage() {
     getQueueSnapshot,
     getServerQueueSnapshot
   );
-  const [sound, setSound] = useState(true);
   const [notice, setNotice] = useState("Pronto para o próximo atendimento");
   const [time, setTime] = useState("");
   const [calling, setCalling] = useState(false);
@@ -205,7 +202,7 @@ export default function DashboardPage() {
         );
 
         playCallAlert();
-        if (sound && "speechSynthesis" in window) {
+        if ("speechSynthesis" in window) {
           window.speechSynthesis.cancel();
           const guicheText =
             session?.guiche && session.guiche !== "none"
@@ -221,10 +218,10 @@ export default function DashboardPage() {
 
       setCalling(false);
     },
-    [calling, sector, session, sound]
+    [calling, sector, session]
   );
 
-  // Função para chamar novamente a última senha
+  // Função para chamar novamente a última senha exibida
   const reCall = useCallback(() => {
     const lastItem = current.history[0];
     if (!lastItem) {
@@ -235,7 +232,7 @@ export default function DashboardPage() {
     setNotice(`Chamando novamente: ${formatQueueNumber(lastItem.number, lastItem.type)}`);
 
     playCallAlert();
-    if (sound && "speechSynthesis" in window) {
+    if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
       const guicheText =
         session?.guiche && session.guiche !== "none"
@@ -247,9 +244,9 @@ export default function DashboardPage() {
       utterance.lang = "pt-BR";
       window.speechSynthesis.speak(utterance);
     }
-  }, [current.history, session, sound]);
+  }, [current.history, session]);
 
-  // Atalhos de teclado e passador de slides
+  // Atalhos de Teclado
   useEffect(() => {
     function handleKeyDown(event) {
       if (
@@ -331,28 +328,23 @@ export default function DashboardPage() {
             <div className={styles.connection}>
               <CheckCircle2 size={16} /> Sistema online
             </div>
-            <Link href={`/monitor/${sector}`} className={styles.monitorLink}>
+            
+            <Link
+              href={`/monitor/${sector}`}
+              className={styles.monitorLink}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <Monitor size={17} /> Abrir monitor
             </Link>
+
             <div className={styles.headerTime}>
               <Clock3 size={16} /> {time}
             </div>
           </div>
         </header>
-        <div className={styles.toolbar}>
-          <div>
-            <span className={styles.label}>SERVIÇO VINCULADO À CONTA</span>
-            <div className={styles.serviceName}>{sectorInfo.name}</div>
-          </div>
-          <button
-            className={styles.soundButton}
-            onClick={() => setSound(!sound)}
-          >
-            {sound ? <Volume2 size={17} /> : <VolumeX size={17} />} Som{" "}
-            {sound ? "ativado" : "desativado"}
-          </button>
-        </div>
-        <div className={styles.grid}>
+
+        <div className={styles.grid} style={{ marginTop: "32px" }}>
           <section className={styles.currentCard}>
             <div className={styles.cardTop}>
               <div>
@@ -425,22 +417,8 @@ export default function DashboardPage() {
             </button>
             <button
               type="button"
+              className={styles.recallButton}
               onClick={reCall}
-              style={{
-                marginTop: "12px",
-                padding: "12px",
-                background: "#2563eb",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: "8px",
-                fontWeight: "600",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                width: "100%",
-              }}
             >
               <RotateCcw size={18} /> CHAMAR NOVAMENTE ( BOTÃO LUZ / &apos;B&apos; )
             </button>
