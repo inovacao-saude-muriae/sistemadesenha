@@ -1,0 +1,8 @@
+'use client';
+import Link from 'next/link';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { formatQueueNumber, readQueueState, readSession, SECTORS } from '../../lib/queue';
+import styles from './History.module.css';
+export default function HistoryPage() { const router = useRouter(); const session = readSession(); useEffect(() => { if (!session) router.push('/login'); }, [router, session]); if (!session) return null; const sector = session.sector || 'farmacia'; const items = readQueueState()[sector].history; return <main className={styles.page}><header><Link href="/dashboard"><ArrowLeft size={17} /> Voltar ao dashboard</Link><span>HISTÓRICO DE CHAMADAS</span></header><section className={styles.content}><div className={styles.title}><div><p>REGISTRO OPERACIONAL</p><h1>Histórico de chamadas</h1><span>{SECTORS[sector].name} · atendimentos realizados</span></div></div><div className={styles.table}><div className={styles.head}><span>senha</span><span>tipo</span><span>setor</span><span>horário</span><span>status</span></div>{items.map((item, index) => <div className={styles.row} key={`${item.number}-${item.time}-${index}`}><strong>{formatQueueNumber(item.number, item.type)}</strong><span className={item.type === 'preferencial' ? styles.priority : styles.normal}>{item.type === 'preferencial' ? 'Preferencial' : 'Normal'}</span><span>{SECTORS[sector].name}</span><span>{item.time}</span><span className={styles.called}><CheckCircle2 size={15} /> Concluída</span></div>)}</div></section></main>; }
