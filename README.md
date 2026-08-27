@@ -16,6 +16,10 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Supabase
+
+Copy `.env.example` to `.env.local` and fill in the URL, anon key and service role key from the Supabase project. Then run `supabase/schema.sql` in the Supabase SQL Editor. The service role key is used only by server routes for creating users and storing news images; never expose it as a `NEXT_PUBLIC_` variable.
+
 You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

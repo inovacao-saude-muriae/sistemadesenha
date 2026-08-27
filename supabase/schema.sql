@@ -9,9 +9,14 @@ create table if not exists public.profiles (
   full_name text not null,
   role text not null default 'attendant' check (role in ('admin', 'attendant')),
   sector_id text references public.sectors(id),
+  guiche_id text not null default 'none' check (guiche_id in ('none', 'guiche-1', 'guiche-2', 'guiche-3', 'guiche-4')),
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+alter table public.profiles add column if not exists guiche_id text not null default 'none';
+alter table public.profiles drop constraint if exists profiles_guiche_id_check;
+alter table public.profiles add constraint profiles_guiche_id_check check (guiche_id in ('none', 'guiche-1', 'guiche-2', 'guiche-3', 'guiche-4'));
 
 create table if not exists public.queues (
   sector_id text primary key references public.sectors(id),
@@ -34,6 +39,16 @@ create table if not exists public.settings (
   sound_enabled boolean not null default true
 );
 
+create table if not exists public.news (
+  id bigint generated always as identity primary key,
+  title text not null,
+  image_url text not null,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+insert into storage.buckets (id, name, public) values ('news-images', 'news-images', true) on conflict (id) do nothing;
+
 insert into public.sectors (id, name) values ('farmacia', 'Farmácia'), ('recepcao', 'Recepção Saúde') on conflict (id) do nothing;
 insert into public.queues (sector_id) values ('farmacia'), ('recepcao') on conflict (sector_id) do nothing;
 
@@ -45,6 +60,7 @@ alter table public.profiles enable row level security;
 alter table public.queues enable row level security;
 alter table public.queue_calls enable row level security;
 alter table public.settings enable row level security;
+alter table public.news enable row level security;
 
 create or replace function public.my_sector() returns text language sql stable security definer set search_path = public as $$
   select sector_id from public.profiles where id = auth.uid() and active = true;
