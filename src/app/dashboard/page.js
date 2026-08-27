@@ -32,8 +32,20 @@ import {
 import { isSupabaseConfigured, supabase } from "../../lib/supabase";
 import styles from "./Dashboard.module.css";
 
+// Helper estático para detectar se já estamos montados no navegador sem disparar re-render
+const emptySubscribe = () => () => {};
+function useIsClient() {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
+  const isClient = useIsClient();
+
   const session = useSyncExternalStore(
     subscribeSession,
     getSessionSnapshot,
@@ -44,6 +56,7 @@ export default function DashboardPage() {
     getQueueSnapshot,
     getServerQueueSnapshot
   );
+
   const [notice, setNotice] = useState("Pronto para o próximo atendimento");
   const [time, setTime] = useState("");
   const [calling, setCalling] = useState(false);
@@ -276,6 +289,10 @@ export default function DashboardPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [callNext, reCall]);
 
+  if (!isClient) {
+    return null;
+  }
+
   return (
     <main
       className={`${styles.shell} ${
@@ -339,7 +356,7 @@ export default function DashboardPage() {
             </Link>
 
             <div className={styles.headerTime}>
-              <Clock3 size={16} /> {time}
+              <Clock3 size={16} /> {time || "--:--:--"}
             </div>
           </div>
         </header>
