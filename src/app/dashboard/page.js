@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -38,12 +37,12 @@ export default function DashboardPage() {
   const session = useSyncExternalStore(
     subscribeSession,
     getSessionSnapshot,
-    getServerSessionSnapshot,
+    getServerSessionSnapshot
   );
   const state = useSyncExternalStore(
     subscribeQueue,
     getQueueSnapshot,
-    getServerQueueSnapshot,
+    getServerQueueSnapshot
   );
   const [sound, setSound] = useState(true);
   const [notice, setNotice] = useState("Pronto para o próximo atendimento");
@@ -51,14 +50,11 @@ export default function DashboardPage() {
   const [calling, setCalling] = useState(false);
 
   useEffect(() => {
-    const update = () => undefined;
     const storedSession = getSessionSnapshot();
     if (!storedSession) {
       router.push("/login");
       return undefined;
     }
-    window.addEventListener("queue-updated", update);
-    window.addEventListener("storage", update);
     const timer = window.setInterval(
       () =>
         setTime(
@@ -66,14 +62,11 @@ export default function DashboardPage() {
             hour: "2-digit",
             minute: "2-digit",
             second: "2-digit",
-          }).format(new Date()),
+          }).format(new Date())
         ),
-      1000,
+      1000
     );
-    update();
     return () => {
-      window.removeEventListener("queue-updated", update);
-      window.removeEventListener("storage", update);
       window.clearInterval(timer);
     };
   }, [router]);
@@ -95,6 +88,7 @@ export default function DashboardPage() {
             saveQueueState({ ...currentState, [session.sector]: nextQueue });
         })
         .catch(() => undefined);
+
     syncCentralQueue();
     const timer = window.setInterval(syncCentralQueue, 3000);
     return () => window.clearInterval(timer);
@@ -102,98 +96,120 @@ export default function DashboardPage() {
 
   const sector = session?.sector || "farmacia";
   const current = normalizeQueue(state[sector]);
-  const sectorInfo = SECTORS[sector];
+  const sectorInfo = SECTORS[sector] || SECTORS.farmacia;
 
-  async function callNext(type) {
-    if (calling) return;
-    setCalling(true);
-    await withQueueLock(async () => {
-      const latestState = readQueueState();
-      const latest = normalizeQueue(latestState[sector]);
-      const field =
-        type === "preferencial" ? "priorityCurrent" : "normalCurrent";
-      let next;
-      try {
-        const response = await fetch("/api/queue/call", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sector,
-            type,
-            attendantId: session?.id || null,
-          }),
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          setNotice(
-            data.error || "Não foi possível conectar à sequência central.",
-          );
-          next = null;
-        } else {
-          next = data.number;
-        }
-      } catch {
-        next = null;
-      }
-      if (!Number.isInteger(next) || next < 1 || next > 1000) {
-        setNotice("Não foi possível conectar à sequência central.");
-        setCalling(false);
-        return;
-      }
-      const updated = {
-        ...latestState,
-        [sector]: {
-          ...latest,
-          [field]: next,
-          history: [
-            {
-              number: next,
+  // Função callNext otimizada para o React Compiler
+  const callNext = useCallback(
+    async (type) => {
+      if (calling) return;
+      setCalling(true);
+
+      await withQueueLock(async () => {
+        const latestState = readQueueState();
+        const latest = normalizeQueue(latestState[sector]);
+        const field =
+          type === "preferencial" ? "priorityCurrent" : "normalCurrent";
+        let next;
+
+        try {
+          const response = await fetch("/api/queue/call", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sector,
               type,
-              time: new Intl.DateTimeFormat("pt-BR", {
-                hour: "2-digit",
-                minute: "2-digit",
-              }).format(new Date()),
-            },
-            ...latest.history,
-          ].slice(0, 8),
-        },
-      };
-      saveQueueState(updated);
-      setNotice(
-        type === "preferencial"
-          ? "Senha preferencial chamada"
-          : "Senha normal chamada",
-      );
-      playCallAlert();
-      if (sound && "speechSynthesis" in window)
-        window.speechSynthesis.speak(
-          new SpeechSynthesisUtterance(
-            `Senha ${formatQueueNumber(next, type)}, dirigir-se ao atendimento.`,
-          ),
+              attendantId: session?.id || null,
+            }),
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            setNotice(
+              data.error || "Não foi possível conectar à sequência central."
+            );
+            next = null;
+          } else {
+            next = data.number;
+          }
+        } catch {
+          next = null;
+        }
+
+        if (!Number.isInteger(next) || next < 1 || next > 1000) {
+          setNotice("Não foi possível conectar à sequência central.");
+          setCalling(false);
+          return;
+        }
+
+        const updated = {
+          ...latestState,
+          [sector]: {
+            ...latest,
+            [field]: next,
+            history: [
+              {
+                number: next,
+                type,
+                time: new Intl.DateTimeFormat("pt-BR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }).format(new Date()),
+              },
+              ...latest.history,
+            ].slice(0, 8),
+          },
+        };
+
+        saveQueueState(updated);
+        setNotice(
+          type === "preferencial"
+            ? "Senha preferencial chamada"
+            : "Senha normal chamada"
         );
-    });
-    setCalling(false);
-  }
+
+        playCallAlert();
+        if (sound && "speechSynthesis" in window) {
+          window.speechSynthesis.cancel();
+          const guicheText =
+            session?.guiche && session.guiche !== "none"
+              ? `, dirigir-se ao ${session.guiche.replace("guiche-", "guichê ")}`
+              : ", dirigir-se ao atendimento";
+
+          const text = `Senha ${formatQueueNumber(next, type)}${guicheText}.`;
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = "pt-BR";
+          window.speechSynthesis.speak(utterance);
+        }
+      });
+
+      setCalling(false);
+    },
+    [calling, sector, session, sound]
+  );
 
   useEffect(() => {
-    function handleSlideClick(event) {
+    function handleKeyDown(event) {
       if (
         ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(event.target.tagName)
-      )
+      ) {
         return;
+      }
       const normalCall = ["ArrowRight", "PageDown", " "].includes(event.key);
       const priorityCall = ["ArrowLeft", "PageUp"].includes(event.key);
       if (!normalCall && !priorityCall) return;
+
       event.preventDefault();
       callNext(priorityCall ? "preferencial" : "normal");
     }
-    window.addEventListener("keydown", handleSlideClick);
-    return () => window.removeEventListener("keydown", handleSlideClick);
-  }, [calling, sound, sector, current]);
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [callNext]);
 
   return (
     <main
-      className={`${styles.shell} ${session?.accessLevel === 2 ? styles.secondary : ""}`}
+      className={`${styles.shell} ${
+        session?.accessLevel === 2 ? styles.secondary : ""
+      }`}
     >
       <aside className={styles.sidebar}>
         <nav className={styles.nav}>
@@ -277,7 +293,7 @@ export default function DashboardPage() {
               {current.history[0]
                 ? formatQueueNumber(
                     current.history[0].number,
-                    current.history[0].type,
+                    current.history[0].type
                   )
                 : "N001"}
             </div>
@@ -312,7 +328,7 @@ export default function DashboardPage() {
                 Próxima senha:{" "}
                 {formatQueueNumber(
                   nextQueueNumber(current.normalCurrent),
-                  "normal",
+                  "normal"
                 )}
               </small>
             </button>
@@ -329,7 +345,7 @@ export default function DashboardPage() {
                 Próxima senha:{" "}
                 {formatQueueNumber(
                   nextQueueNumber(current.priorityCurrent),
-                  "preferencial",
+                  "preferencial"
                 )}
               </small>
             </button>
@@ -358,7 +374,7 @@ export default function DashboardPage() {
                 className={styles.tableRow}
                 key={`${item.number}-${item.time}-${index}`}
               >
-                <strong>{formatQueueNumber(item.number)}</strong>
+                <strong>{formatQueueNumber(item.number, item.type)}</strong>
                 <span
                   className={
                     item.type === "preferencial"
