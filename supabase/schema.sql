@@ -67,7 +67,7 @@ select sector_id, call_type from public.sectors cross join (values ('normal'), (
 on conflict (sector_id, call_type) do nothing;
 
 create index if not exists queue_calls_sector_created_idx on public.queue_calls (sector_id, created_at desc);
-create index if not exists queue_calls_status_idx on public.queue_calls (status);
+create index if not exists queue_calls_type_idx on public.queue_calls (type);
 
 alter table public.sectors enable row level security;
 alter table public.profiles enable row level security;
@@ -89,7 +89,7 @@ create policy "users read own profile" on public.profiles for select to authenti
 create policy "sector queues are private" on public.queues for select to authenticated using (sector_id = public.my_sector() or public.is_admin());
 create policy "attendants update own queue" on public.queues for update to authenticated using (sector_id = public.my_sector() or public.is_admin()) with check (sector_id = public.my_sector() or public.is_admin());
 create policy "sector calls are private" on public.queue_calls for select to authenticated using (sector_id = public.my_sector() or public.is_admin());
-create policy "attendants insert calls" on public.queue_calls for insert to authenticated with check (sector_id = public.my_sector() and attendant_id = auth.uid());
+create policy "attendants insert calls" on public.queue_calls for insert to authenticated with check (sector_id = public.my_sector() and called_by = auth.uid());
 create policy "users manage own settings" on public.settings for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 alter table public.queue_calls replica identity full;

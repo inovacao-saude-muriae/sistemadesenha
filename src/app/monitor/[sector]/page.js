@@ -127,7 +127,7 @@ export default function MonitorPage({ params }) {
             call.type === "preferential" ? "priorityCurrent" : "normalCurrent";
           const nextQueue = {
             ...queue,
-            [field]: call.number,
+            [field]: call.number_int,
             history: [
               {
                 number: call.number_int,
