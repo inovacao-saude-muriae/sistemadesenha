@@ -82,7 +82,7 @@ export default function AdminPage() {
   const [stats, setStats] = useState(null);
   const [draftNews, setDraftNews] = useState([]);
   const [savingNews, setSavingNews] = useState(false);
-  const [resettingAll, setResettingAll] = useState(false);
+  const [resettingSector, setResettingSector] = useState({});
   const [, refreshNews] = useState(0);
 
   // Redirecionamento de segurança caso não seja Admin
@@ -115,60 +115,36 @@ export default function AdminPage() {
 
   if (!session) return null;
 
-  // Reseta os contadores do dia (Local e no Banco de Dados)
-  async function reset(sectorId) {
-    if (!window.confirm(`Tem certeza que deseja zerar a fila do setor ${SECTORS[sectorId]?.name || sectorId}?`)) {
-      return;
-    }
+  // Reseta a numeração de um setor (ou de todos com sectorId = "all")
+  async function resetSector(sectorId) {
+    const isAll = sectorId === "all";
+    const label = isAll
+      ? "TODOS os setores (Farmácia e Recepção)"
+      : SECTORS[sectorId]?.name || sectorId;
 
-    try {
-      // Zera o estado local
-      const currentState = getQueueSnapshot();
-      const next = {
-        ...currentState,
-        [sectorId]: {
-          ...normalizeQueue(currentState[sectorId]),
-          normalCurrent: 0,
-          priorityCurrent: 0,
-          history: [],
-        },
-      };
-      saveQueueState(next);
+    const msg = isAll
+      ? `ATENÇÃO\n\nIsso vai zerar as senhas de ${label}.\n\nA numeração voltará para 001. Esta ação não pode ser desfeita.\n\nDeseja continuar?`
+      : `Zerar as senhas do setor "${label}"?\n\nA numeração voltará para 001.`;
 
-      const response = await fetch("/api/queue/reset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sector: sectorId }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok && !data.localOnly) {
-        setMessage(data.error || "Ocorreu um erro ao zerar o contador no banco de dados.");
-        return;
-      }
+    if (!window.confirm(msg)) return;
 
-      setMessage(`Contador do setor ${SECTORS[sectorId]?.name} zerado com sucesso.`);
-    } catch {
-      setMessage("Ocorreu um erro ao zerar o contador no banco de dados.");
-    }
-  }
+    const sectorsToReset = isAll ? Object.keys(SECTORS) : [sectorId];
 
-  // Reseta TODOS os setores de uma só vez
-  async function resetAll() {
-    const confirmed = window.confirm(
-      "ATENCAO\n\nIsso vai zerar as senhas de TODOS os setores (Farmacia e Recepcao).\n\nA numeracao voltara para 001. Esta acao nao pode ser desfeita.\n\nDeseja continuar?"
-    );
-    if (!confirmed) return;
-
-    setResettingAll(true);
+    // Marca como "resetando"
+    setResettingSector((prev) => {
+      const next = { ...prev };
+      for (const s of sectorsToReset) next[s] = true;
+      return next;
+    });
     setMessage("");
 
     try {
-      // Zera o estado local de todos os setores
+      // Zera estado local
       const currentState = getQueueSnapshot();
       const next = { ...currentState };
-      for (const sectorId of Object.keys(SECTORS)) {
-        next[sectorId] = {
-          ...normalizeQueue(currentState[sectorId]),
+      for (const s of sectorsToReset) {
+        next[s] = {
+          ...normalizeQueue(currentState[s]),
           normalCurrent: 0,
           priorityCurrent: 0,
           history: [],
@@ -176,24 +152,32 @@ export default function AdminPage() {
       }
       saveQueueState(next);
 
-      // Zera no banco de dados
+      // Zera no banco
       const response = await fetch("/api/queue/reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sector: "all" }),
+        body: JSON.stringify({ sector: sectorId }),
       });
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok && !data.localOnly) {
-        setMessage(data.error || "Erro ao zerar os contadores no banco de dados.");
+        setMessage(data.error || "Erro ao zerar o contador no banco de dados.");
         return;
       }
 
-      setMessage("Todas as senhas foram resetadas. Numeracao reinicia em 001.");
+      setMessage(
+        isAll
+          ? "Todas as senhas foram resetadas. Numeração reinicia em 001."
+          : `Senhas de "${label}" zeradas. Numeração reinicia em 001.`
+      );
     } catch {
-      setMessage("Erro ao tentar resetar todas as senhas.");
+      setMessage("Erro ao zerar os contadores.");
     } finally {
-      setResettingAll(false);
+      setResettingSector((prev) => {
+        const next = { ...prev };
+        for (const s of sectorsToReset) delete next[s];
+        return next;
+      });
     }
   }
 
@@ -315,6 +299,7 @@ export default function AdminPage() {
           <div className={styles.sectors}>
             {Object.values(SECTORS).map((item) => {
               const queue = normalizeQueue(state[item.id]);
+              const isResetting = !!resettingSector[item.id];
               return (
                 <article key={item.id}>
                   <div>
@@ -328,8 +313,14 @@ export default function AdminPage() {
                     <Link href={`/monitor/${item.id}`}>
                       <Monitor size={16} /> Monitor
                     </Link>
-                    <button type="button" onClick={() => reset(item.id)}>
-                      <RotateCcw size={16} /> Limpar dia
+                    <button
+                      type="button"
+                      onClick={() => resetSector(item.id)}
+                      disabled={isResetting}
+                      className={styles.resetSectorButton}
+                    >
+                      <RotateCcw size={16} />
+                      {isResetting ? "Resetando..." : "Resetar senhas"}
                     </button>
                   </div>
                 </article>
@@ -341,18 +332,17 @@ export default function AdminPage() {
             <div className={styles.resetAllInfo}>
               <AlertTriangle size={16} />
               <span>
-                O reset geral zera a numeração de <strong>todos os setores</strong> e
-                reinicia do 001. Use no início do dia ou turno.
+                Resetar todos os setores de uma vez — numeração volta para 001 em todos.
               </span>
             </div>
             <button
               type="button"
               className={styles.resetAllButton}
-              onClick={resetAll}
-              disabled={resettingAll}
+              onClick={() => resetSector("all")}
+              disabled={Object.keys(resettingSector).length > 0}
             >
               <RotateCcw size={16} />
-              {resettingAll ? "Resetando..." : "Resetar todas as senhas"}
+              {Object.keys(resettingSector).length > 0 ? "Resetando..." : "Resetar todos os setores"}
             </button>
           </div>
         </section>

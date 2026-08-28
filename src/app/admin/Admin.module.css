@@ -193,8 +193,15 @@
   color: #20738c;
 }
 .cardActions button {
-  background: #fff0e2;
-  color: #ad681e;
+  background: #ffeaea;
+  color: #c0392b;
+}
+.cardActions button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.resetSectorButton {
+  font-weight: 800;
 }
 .newsForm {
   display: grid;
