@@ -34,7 +34,6 @@ let clientQueueRaw = null;
 let clientSessionSnapshot = null;
 let clientSessionRaw = null;
 
-// CONTAS ÚNICAS E OFICIAIS PERMITIDAS NO SISTEMA
 export const ATTENDANT_ACCOUNTS = {
   admin: {
     name: "Administradora",
@@ -69,7 +68,7 @@ export function nextQueueNumber(current = 0) {
 }
 
 export function formatQueueNumber(number, type = "normal") {
-  const prefix = type === "preferencial" ? "P" : "N";
+  const prefix = type === "preferencial" || type === "preferential" ? "P" : "N";
   return `${prefix}${Number(number) === 1000 ? "1000" : String(Number(number) || 0).padStart(3, "0")}`;
 }
 
@@ -132,6 +131,21 @@ export function saveQueueState(state) {
   window.dispatchEvent(new CustomEvent("queue-updated", { detail: state }));
 }
 
+// Limpa apenas as chamadas visíveis no monitor mantendo os contadores intactos
+export function clearMonitorHistory(sector) {
+  const state = readQueueState();
+  if (state[sector]) {
+    const updated = {
+      ...state,
+      [sector]: {
+        ...state[sector],
+        history: [],
+      },
+    };
+    saveQueueState(updated);
+  }
+}
+
 export function readSession() {
   if (typeof window === "undefined") return null;
   try {
@@ -175,25 +189,9 @@ export async function withQueueLock(callback) {
   }
 }
 
+// Bip desativado permanentemente
 export function playCallAlert() {
-  if (!window.AudioContext && !window.webkitAudioContext) return;
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  const context = new AudioContextClass();
-  const notes = [880, 1108, 1318];
-  notes.forEach((frequency, index) => {
-    const start = context.currentTime + index * 0.13;
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(frequency, start);
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(0.16, start + 0.018);
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.26);
-    oscillator.connect(gain).connect(context.destination);
-    oscillator.start(start);
-    oscillator.stop(start + 0.28);
-  });
-  window.setTimeout(() => context.close(), 700);
+  return;
 }
 
 export function subscribeQueue(callback) {

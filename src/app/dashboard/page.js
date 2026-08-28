@@ -11,8 +11,10 @@ import {
   Monitor,
   RotateCcw,
   Settings2,
+  Trash2,
 } from "lucide-react";
 import {
+  clearMonitorHistory,
   formatQueueNumber,
   getQueueSnapshot,
   getServerQueueSnapshot,
@@ -20,7 +22,6 @@ import {
   getSessionSnapshot,
   nextQueueNumber,
   normalizeQueue,
-  playCallAlert,
   readQueueState,
   saveQueueState,
   SECTORS,
@@ -32,7 +33,6 @@ import {
 import { isSupabaseConfigured, supabase } from "../../lib/supabase";
 import styles from "./Dashboard.module.css";
 
-// Helper estático para detectar se já estamos montados no navegador sem disparar re-render
 const emptySubscribe = () => () => {};
 function useIsClient() {
   return useSyncExternalStore(
@@ -61,7 +61,6 @@ export default function DashboardPage() {
   const [time, setTime] = useState("");
   const [calling, setCalling] = useState(false);
 
-  // Redirecionamento e relógio local
   useEffect(() => {
     const storedSession = getSessionSnapshot();
     if (!storedSession) {
@@ -84,7 +83,6 @@ export default function DashboardPage() {
     };
   }, [router]);
 
-  // Sincronização em tempo real via Supabase Realtime
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !session?.sector) return;
 
@@ -113,6 +111,14 @@ export default function DashboardPage() {
               ? "priorityCurrent"
               : "normalCurrent";
 
+          if (
+            latest.history.length > 0 &&
+            latest.history[0].number === call.number_int &&
+            latest.history[0].type === callTypeFormatted
+          ) {
+            return;
+          }
+
           const updated = {
             ...latestState,
             [session.sector]: {
@@ -128,7 +134,7 @@ export default function DashboardPage() {
                   }).format(new Date(call.created_at || Date.now())),
                 },
                 ...latest.history,
-              ].slice(0, 8),
+              ].slice(0, 10),
             },
           };
 
@@ -146,7 +152,6 @@ export default function DashboardPage() {
   const current = normalizeQueue(state[sector]);
   const sectorInfo = SECTORS[sector] || SECTORS.farmacia;
 
-  // Função para chamar a próxima senha (Normal ou Preferencial)
   const callNext = useCallback(
     async (type) => {
       if (calling) return;
@@ -203,7 +208,7 @@ export default function DashboardPage() {
                 }).format(new Date()),
               },
               ...latest.history,
-            ].slice(0, 8),
+            ].slice(0, 10),
           },
         };
 
@@ -214,7 +219,6 @@ export default function DashboardPage() {
             : "Senha normal chamada"
         );
 
-        playCallAlert();
         if ("speechSynthesis" in window) {
           window.speechSynthesis.cancel();
           const guicheText =
@@ -234,7 +238,6 @@ export default function DashboardPage() {
     [calling, sector, session]
   );
 
-  // Função para chamar novamente a última senha exibida
   const reCall = useCallback(() => {
     const lastItem = current.history[0];
     if (!lastItem) {
@@ -244,7 +247,6 @@ export default function DashboardPage() {
 
     setNotice(`Chamando novamente: ${formatQueueNumber(lastItem.number, lastItem.type)}`);
 
-    playCallAlert();
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
       const guicheText =
@@ -259,7 +261,11 @@ export default function DashboardPage() {
     }
   }, [current.history, session]);
 
-  // Atalhos de Teclado
+  const handleClearHistory = () => {
+    clearMonitorHistory(sector);
+    setNotice("Histórico do painel limpo com sucesso!");
+  };
+
   useEffect(() => {
     function handleKeyDown(event) {
       if (
@@ -439,8 +445,16 @@ export default function DashboardPage() {
             >
               <RotateCcw size={18} /> CHAMAR NOVAMENTE ( BOTÃO LUZ / &apos;B&apos; )
             </button>
+            <button
+              type="button"
+              className={styles.clearButton || styles.recallButton}
+              onClick={handleClearHistory}
+              style={{ marginTop: "10px", backgroundColor: "#ef4444", color: "#fff" }}
+            >
+              <Trash2 size={18} /> LIMPAR PAINEL DE CHAMADAS
+            </button>
             <p className={styles.helper}>
-              Normal e preferencial possuem sequências independentes.
+              Limpar o painel remove as senhas do monitor sem resetar a sequência numérica.
             </p>
           </section>
         </div>
@@ -462,7 +476,7 @@ export default function DashboardPage() {
             {current.history.slice(0, 5).map((item, index) => (
               <div
                 className={styles.tableRow}
-                key={`${item.number}-${item.time}-${index}`}
+                key={`${item.number}-${item.type}-${item.time}-${index}`}
               >
                 <strong>{formatQueueNumber(item.number, item.type)}</strong>
                 <span

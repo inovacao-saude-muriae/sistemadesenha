@@ -6,7 +6,6 @@ import { Clock3 } from "lucide-react";
 import {
   formatQueueNumber,
   getQueueSnapshot,
-  playCallAlert,
   saveQueueState,
   SECTORS,
   subscribeQueue,
@@ -35,35 +34,26 @@ function subscribeNews(callback) {
   };
 }
 
-// Reprodução automática da voz
 function speakText(text) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
   try {
-    try {
-      playCallAlert();
-    } catch {
-      // Ignora erro do bipe para não interromper a voz
-    }
-
     if (window.speechSynthesis.paused) {
       window.speechSynthesis.resume();
     }
     window.speechSynthesis.cancel();
 
-    setTimeout(() => {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = "pt-BR";
-      utterance.rate = 0.95;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "pt-BR";
+    utterance.rate = 0.95;
 
-      const voices = window.speechSynthesis.getVoices();
-      const ptVoice = voices.find(
-        (v) => v.lang.includes("pt-BR") || v.lang.includes("pt_BR") || v.lang.includes("pt")
-      );
-      if (ptVoice) utterance.voice = ptVoice;
+    const voices = window.speechSynthesis.getVoices();
+    const ptVoice = voices.find(
+      (v) => v.lang.includes("pt-BR") || v.lang.includes("pt_BR") || v.lang.includes("pt")
+    );
+    if (ptVoice) utterance.voice = ptVoice;
 
-      window.speechSynthesis.speak(utterance);
-    }, 100);
+    window.speechSynthesis.speak(utterance);
   } catch (e) {
     console.error("Erro na síntese de voz:", e);
   }
@@ -96,7 +86,6 @@ export default function MonitorPage({ params }) {
     }
   }, []);
 
-  // Notícias
   useEffect(() => {
     fetch("/api/news")
       .then((res) => (res.ok ? res.json() : null))
@@ -108,7 +97,6 @@ export default function MonitorPage({ params }) {
       .catch(() => undefined);
   }, []);
 
-  // Relógio
   useEffect(() => {
     const clockTimer = setInterval(() => {
       setTime(
@@ -130,45 +118,48 @@ export default function MonitorPage({ params }) {
     };
   }, [news?.length]);
 
-  // Supabase Realtime
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !sector) return;
 
-    const processCall = (numberInt, typeStr, createdAt) => {
-      const previous = getQueueSnapshot() || monitorServerSnapshot;
-      const queue = previous[sector] || {};
-      const callTypeFormatted =
-        typeStr === "preferential" || typeStr === "preferencial"
-          ? "preferencial"
-          : "normal";
-      const field =
-        callTypeFormatted === "preferencial" ? "priorityCurrent" : "normalCurrent";
+    async function fetchInitialHistory() {
+      try {
+        const { data, error } = await supabase
+          .from("queue_calls")
+          .select("*")
+          .eq("sector_id", sector)
+          .order("created_at", { ascending: false })
+          .limit(10);
 
-      const nextQueue = {
-        ...queue,
-        [field]: numberInt,
-        history: [
-          {
-            number: numberInt,
-            type: callTypeFormatted,
-            time: new Intl.DateTimeFormat("pt-BR", {
-              hour: "2-digit",
-              minute: "2-digit",
-            }).format(new Date(createdAt || Date.now())),
+        if (error || !data || data.length === 0) return;
+
+        const formattedHistory = data.map((item) => ({
+          number: item.number_int,
+          type:
+            item.type === "preferential" || item.type === "preferencial"
+              ? "preferencial"
+              : "normal",
+          time: new Intl.DateTimeFormat("pt-BR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }).format(new Date(item.created_at || Date.now())),
+        }));
+
+        const previous = getQueueSnapshot() || monitorServerSnapshot;
+        const queue = previous[sector] || {};
+
+        saveQueueState({
+          ...previous,
+          [sector]: {
+            ...queue,
+            history: formattedHistory,
           },
-          ...(queue.history || []),
-        ].slice(0, 8),
-      };
+        });
+      } catch (err) {
+        console.error("Erro ao carregar histórico inicial:", err);
+      }
+    }
 
-      saveQueueState({ ...previous, [sector]: nextQueue });
-
-      const textToSpeak = `Senha ${formatQueueNumber(
-        numberInt,
-        callTypeFormatted
-      )}, dirigir-se ao atendimento.`;
-
-      speakText(textToSpeak);
-    };
+    fetchInitialHistory();
 
     const channel = supabase
       .channel(`realtime-monitor-${sector}`)
@@ -181,24 +172,58 @@ export default function MonitorPage({ params }) {
           filter: `sector_id=eq.${sector}`,
         },
         (payload) => {
-          if (payload?.new?.number_int) {
-            processCall(
-              payload.new.number_int,
-              payload.new.type,
-              payload.new.created_at
-            );
+          const call = payload.new;
+          if (!call || !call.number_int) return;
+
+          const previous = getQueueSnapshot() || monitorServerSnapshot;
+          const queue = previous[sector] || {};
+          const callTypeFormatted =
+            call.type === "preferential" || call.type === "preferencial"
+              ? "preferencial"
+              : "normal";
+          const field =
+            callTypeFormatted === "preferencial" ? "priorityCurrent" : "normalCurrent";
+
+          const currentHistory = queue.history || [];
+
+          if (
+            currentHistory.length > 0 &&
+            currentHistory[0].number === call.number_int &&
+            currentHistory[0].type === callTypeFormatted
+          ) {
+            return;
           }
+
+          const timeStr = new Intl.DateTimeFormat("pt-BR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }).format(new Date(call.created_at || Date.now()));
+
+          const newCallObj = {
+            number: call.number_int,
+            type: callTypeFormatted,
+            time: timeStr,
+          };
+
+          const nextHistory = [newCallObj, ...currentHistory].slice(0, 10);
+
+          saveQueueState({
+            ...previous,
+            [sector]: {
+              ...queue,
+              [field]: call.number_int,
+              history: nextHistory,
+            },
+          });
+
+          const textToSpeak = `Senha ${formatQueueNumber(
+            call.number_int,
+            callTypeFormatted
+          )}, dirigir-se ao atendimento.`;
+
+          speakText(textToSpeak);
         }
       )
-      .on("broadcast", { event: "new_call" }, (response) => {
-        if (response?.payload?.number_int) {
-          processCall(
-            response.payload.number_int,
-            response.payload.type,
-            response.payload.created_at
-          );
-        }
-      })
       .subscribe();
 
     return () => {
@@ -208,11 +233,16 @@ export default function MonitorPage({ params }) {
 
   const info = SECTORS[sector] || SECTORS.farmacia;
   const current = state[sector] || state.farmacia || { normalCurrent: 0, history: [] };
-  const historyList = current.history || [];
-  const latest = historyList[0] || {
+
+  const history = current.history || [];
+
+  const latest = history[0] || {
     number: current.normalCurrent || 0,
     type: "normal",
   };
+
+  // Garante exatamente 4 itens na lista do histórico
+  const recentCalls = history.slice(1, 5);
 
   return (
     <main className={styles.monitor}>
@@ -258,34 +288,40 @@ export default function MonitorPage({ params }) {
 
           <section className={styles.recent}>
             <p className={styles.kicker}>ÚLTIMAS SENHAS</p>
-            {historyList.slice(0, 4).map((item, index) => (
-              <div
-                className={styles.historyItem}
-                key={`${item.number}-${item.time}-${index}`}
-              >
-                <strong
-                  className={
-                    item.type === "preferencial"
-                      ? styles.priorityNumber
-                      : styles.normalNumber
-                  }
+            {recentCalls.length > 0 ? (
+              recentCalls.map((item, index) => (
+                <div
+                  className={styles.historyItem}
+                  key={`${item.number}-${item.type}-${index}`}
                 >
-                  {formatQueueNumber(item.number, item.type)}
-                </strong>
-                <span
-                  className={
-                    item.type === "preferencial"
-                      ? styles.priority
-                      : styles.normal
-                  }
-                >
-                  {item.type === "preferencial"
-                    ? "PREFERENCIAL"
-                    : "ATENDIMENTO"}
-                </span>
-                <time>{item.time}</time>
-              </div>
-            ))}
+                  <strong
+                    className={
+                      item.type === "preferencial"
+                        ? styles.priorityNumber
+                        : styles.normalNumber
+                    }
+                  >
+                    {formatQueueNumber(item.number, item.type)}
+                  </strong>
+                  <span
+                    className={
+                      item.type === "preferencial"
+                        ? styles.priority
+                        : styles.normal
+                    }
+                  >
+                    {item.type === "preferencial"
+                      ? "PREFERENCIAL"
+                      : "ATENDIMENTO"}
+                  </span>
+                  <time>{item.time}</time>
+                </div>
+              ))
+            ) : (
+              <p style={{ fontSize: "14px", color: "#888", marginTop: "12px" }}>
+                Aguardando chamadas anteriores...
+              </p>
+            )}
           </section>
         </section>
 
