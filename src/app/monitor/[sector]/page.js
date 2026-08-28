@@ -279,7 +279,9 @@ export default function MonitorPage({ params }) {
           }
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        setLastEvent(`canal: ${status}${err ? " | " + String(err.message || err) : ""}`);
+      });
 
     return () => {
       supabase.removeChannel(channel);
