@@ -266,8 +266,8 @@ export default function MonitorPage({ params }) {
             },
           });
 
-          // monitorSpeak é o único ponto de fala do monitor.
-          // Só fala se o áudio estiver habilitado e esta aba for o speaker registrado.
+          // monitorSpeak é o único ponto de fala do sistema.
+          // audioEnabledRef garante que só fala após o usuário clicar "Ativar Áudio".
           if (audioEnabledRef.current) {
             monitorSpeak(call.number_int, callTypeFormatted);
           }
