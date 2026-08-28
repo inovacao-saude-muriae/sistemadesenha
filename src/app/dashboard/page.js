@@ -42,6 +42,16 @@ function useIsClient() {
   );
 }
 
+let dashboardUtterance = null;
+
+function buildSpeechText(number, type) {
+  const numInt = Number(number) || 0;
+  if (type === "preferencial") {
+    return `Pê. ${numInt}.`;
+  }
+  return `${numInt}.`;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const isClient = useIsClient();
@@ -83,6 +93,7 @@ export default function DashboardPage() {
     };
   }, [router]);
 
+  // Atualizações do realtime sem disparo de áudio redundante
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !session?.sector) return;
 
@@ -152,16 +163,38 @@ export default function DashboardPage() {
   const current = normalizeQueue(state[sector]);
   const sectorInfo = SECTORS[sector] || SECTORS.farmacia;
 
+  const speakDashboard = (text) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    try {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+      window.speechSynthesis.cancel();
+
+      setTimeout(() => {
+        dashboardUtterance = new SpeechSynthesisUtterance(text);
+        dashboardUtterance.lang = "pt-BR";
+        dashboardUtterance.rate = 0.85;
+
+        const voices = window.speechSynthesis.getVoices();
+        const ptVoice = voices.find(
+          (v) => v.lang === "pt-BR" || v.lang === "pt_BR" || v.lang.startsWith("pt")
+        );
+        if (ptVoice) dashboardUtterance.voice = ptVoice;
+
+        window.speechSynthesis.speak(dashboardUtterance);
+      }, 100);
+    } catch {
+      // Ignora erros secundários
+    }
+  };
+
   const callNext = useCallback(
     async (type) => {
       if (calling) return;
       setCalling(true);
 
       await withQueueLock(async () => {
-        const latestState = readQueueState();
-        const latest = normalizeQueue(latestState[sector]);
-        const field =
-          type === "preferencial" ? "priorityCurrent" : "normalCurrent";
         let next;
 
         try {
@@ -176,9 +209,7 @@ export default function DashboardPage() {
           });
           const data = await response.json();
           if (!response.ok) {
-            setNotice(
-              data.error || "Não foi possível conectar à sequência central."
-            );
+            setNotice(data.error || "Erro ao conectar à sequência central.");
             next = null;
           } else {
             next = data.number;
@@ -193,44 +224,14 @@ export default function DashboardPage() {
           return;
         }
 
-        const updated = {
-          ...latestState,
-          [sector]: {
-            ...latest,
-            [field]: next,
-            history: [
-              {
-                number: next,
-                type,
-                time: new Intl.DateTimeFormat("pt-BR", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }).format(new Date()),
-              },
-              ...latest.history,
-            ].slice(0, 10),
-          },
-        };
-
-        saveQueueState(updated);
         setNotice(
           type === "preferencial"
             ? "Senha preferencial chamada"
             : "Senha normal chamada"
         );
 
-        if ("speechSynthesis" in window) {
-          window.speechSynthesis.cancel();
-          const guicheText =
-            session?.guiche && session.guiche !== "none"
-              ? `, dirigir-se ao ${session.guiche.replace("guiche-", "guichê ")}`
-              : ", dirigir-se ao atendimento";
-
-          const text = `Senha ${formatQueueNumber(next, type)}${guicheText}.`;
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = "pt-BR";
-          window.speechSynthesis.speak(utterance);
-        }
+        const textToSpeak = buildSpeechText(next, type);
+        speakDashboard(textToSpeak);
       });
 
       setCalling(false);
@@ -247,19 +248,9 @@ export default function DashboardPage() {
 
     setNotice(`Chamando novamente: ${formatQueueNumber(lastItem.number, lastItem.type)}`);
 
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const guicheText =
-        session?.guiche && session.guiche !== "none"
-          ? `, dirigir-se ao ${session.guiche.replace("guiche-", "guichê ")}`
-          : ", dirigir-se ao atendimento";
-
-      const text = `Senha ${formatQueueNumber(lastItem.number, lastItem.type)}${guicheText}.`;
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = "pt-BR";
-      window.speechSynthesis.speak(utterance);
-    }
-  }, [current.history, session]);
+    const textToSpeak = buildSpeechText(lastItem.number, lastItem.type);
+    speakDashboard(textToSpeak);
+  }, [current.history]);
 
   const handleClearHistory = () => {
     clearMonitorHistory(sector);
@@ -351,7 +342,7 @@ export default function DashboardPage() {
             <div className={styles.connection}>
               <CheckCircle2 size={16} /> Sistema online
             </div>
-            
+
             <Link
               href={`/monitor/${sector}`}
               className={styles.monitorLink}
@@ -447,7 +438,7 @@ export default function DashboardPage() {
             </button>
             <button
               type="button"
-              className={styles.clearButton || styles.recallButton}
+              className={styles.recallButton}
               onClick={handleClearHistory}
               style={{ marginTop: "10px", backgroundColor: "#ef4444", color: "#fff" }}
             >

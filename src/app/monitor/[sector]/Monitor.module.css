@@ -2,6 +2,7 @@
 .slideControls button {
   display: none;
 }
+
 .slideControls {
   justify-content: center;
   margin-top: 0;
@@ -21,7 +22,7 @@
   background: #f5f8f9;
   color: #173b51;
   display: grid;
-  grid-template-rows: 88px 1fr; /* 88px do topo e 1fr preenchendo 100% do resto */
+  grid-template-rows: 88px 1fr; /* 88px do topo e 1fr preenchendo o resto */
 }
 
 /* CABEÇALHO */
@@ -134,17 +135,38 @@
   letter-spacing: 5px;
 }
 
-.featuredPriority > strong,
-.featuredPriority > span {
+.featuredPriority > strong {
   color: #d63838;
 }
 
 .featured > span {
   margin-top: 12px;
-  color: #1972a0;
+  color: #ffffff;
   font-size: 14px;
   font-weight: 800;
   letter-spacing: 1.5px;
+}
+
+/* TAG DE ATENDIMENTO PREFERENCIAL (FUNDO VERMELHO, TEXTO PRETO E CANTOS ARREDONDADOS) */
+.priorityTag {
+  background-color: #ef4444;
+  color: #000000;
+  padding: 10px 24px;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 1.2rem;
+  display: inline-block;
+  margin-top: 8px;
+  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3);
+}
+
+.priorityTagSmall {
+  background-color: #ef4444;
+  color: #FFF;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-weight: bold;
+  font-size: 0.85rem;
 }
 
 .featured small {

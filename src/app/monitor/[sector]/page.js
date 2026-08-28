@@ -2,9 +2,8 @@
 
 import { use, useEffect, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
-import { Clock3 } from "lucide-react";
+import { Clock3, Volume2 } from "lucide-react";
 import {
-  formatQueueNumber,
   getQueueSnapshot,
   saveQueueState,
   SECTORS,
@@ -20,6 +19,8 @@ const monitorServerSnapshot = {
   recepcao: { normalCurrent: 0, priorityCurrent: 0, history: [] },
 };
 
+let currentUtterance = null;
+
 function getNewsSnapshot() {
   if (typeof window === "undefined") return serverNewsSnapshot;
   return newsSnapshot;
@@ -34,6 +35,21 @@ function subscribeNews(callback) {
   };
 }
 
+// Formatação do número da senha sem letras no Monitor
+function formatMonitorNumber(number) {
+  const numInt = Number(number) || 0;
+  if (numInt === 1000) return "1000";
+  return String(numInt).padStart(3, "0");
+}
+
+function buildSpeechText(number, type) {
+  const numInt = Number(number) || 0;
+  if (type === "preferencial") {
+    return `Pê. ${numInt}.`;
+  }
+  return `${numInt}.`;
+}
+
 function speakText(text) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
@@ -43,20 +59,54 @@ function speakText(text) {
     }
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "pt-BR";
-    utterance.rate = 0.95;
+    setTimeout(() => {
+      currentUtterance = new SpeechSynthesisUtterance(text);
+      currentUtterance.lang = "pt-BR";
+      currentUtterance.rate = 0.85;
+      currentUtterance.pitch = 1.0;
 
-    const voices = window.speechSynthesis.getVoices();
-    const ptVoice = voices.find(
-      (v) => v.lang.includes("pt-BR") || v.lang.includes("pt_BR") || v.lang.includes("pt")
-    );
-    if (ptVoice) utterance.voice = ptVoice;
+      const voices = window.speechSynthesis.getVoices();
+      const ptVoice = voices.find(
+        (v) =>
+          v.lang === "pt-BR" ||
+          v.lang === "pt_BR" ||
+          v.name.includes("Brazil") ||
+          v.name.includes("Portuguese")
+      );
 
-    window.speechSynthesis.speak(utterance);
+      if (ptVoice) {
+        currentUtterance.voice = ptVoice;
+      }
+
+      currentUtterance.onend = () => {
+        currentUtterance = null;
+      };
+
+      currentUtterance.onerror = () => {
+        currentUtterance = null;
+      };
+
+      window.speechSynthesis.speak(currentUtterance);
+    }, 100);
   } catch (e) {
     console.error("Erro na síntese de voz:", e);
   }
+}
+
+function cleanHistory(history = []) {
+  if (!Array.isArray(history)) return [];
+  const result = [];
+  const seenKeys = new Set();
+
+  for (const item of history) {
+    if (!item || !item.number) continue;
+    const key = `${item.id || item.number}-${item.type}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      result.push(item);
+    }
+  }
+  return result;
 }
 
 export default function MonitorPage({ params }) {
@@ -76,21 +126,33 @@ export default function MonitorPage({ params }) {
 
   const [time, setTime] = useState("");
   const [newsIndex, setNewsIndex] = useState(0);
+  const [audioEnabled, setAudioEnabled] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.getVoices();
-      window.speechSynthesis.onvoiceschanged = () => {
+      const loadVoices = () => {
         window.speechSynthesis.getVoices();
       };
+      loadVoices();
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+      }
     }
   }, []);
+
+  const enableAudio = () => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.resume();
+      speakText("Som ativado");
+    }
+    setAudioEnabled(true);
+  };
 
   useEffect(() => {
     fetch("/api/news")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (!data?.news) return;
+        if (!data?.news || !data.news.length) return;
         newsSnapshot = data.news;
         window.dispatchEvent(new Event("news-updated"));
       })
@@ -108,15 +170,18 @@ export default function MonitorPage({ params }) {
       );
     }, 1000);
 
-    const newsTimer = setInterval(() => {
-      setNewsIndex((index) => (news?.length ? (index + 1) % news.length : 0));
-    }, 6000);
+    return () => clearInterval(clockTimer);
+  }, []);
 
-    return () => {
-      clearInterval(clockTimer);
-      clearInterval(newsTimer);
-    };
-  }, [news?.length]);
+  useEffect(() => {
+    if (!news || news.length === 0) return;
+
+    const newsTimer = setInterval(() => {
+      setNewsIndex((prevIndex) => (prevIndex + 1) % news.length);
+    }, 5000);
+
+    return () => clearInterval(newsTimer);
+  }, [news]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !sector) return;
@@ -127,12 +192,13 @@ export default function MonitorPage({ params }) {
           .from("queue_calls")
           .select("*")
           .eq("sector_id", sector)
-          .order("created_at", { ascending: false })
-          .limit(10);
+          .order("id", { ascending: false })
+          .limit(30);
 
         if (error || !data || data.length === 0) return;
 
         const formattedHistory = data.map((item) => ({
+          id: item.id,
           number: item.number_int,
           type:
             item.type === "preferential" || item.type === "preferencial"
@@ -144,6 +210,7 @@ export default function MonitorPage({ params }) {
           }).format(new Date(item.created_at || Date.now())),
         }));
 
+        const clean = cleanHistory(formattedHistory);
         const previous = getQueueSnapshot() || monitorServerSnapshot;
         const queue = previous[sector] || {};
 
@@ -151,7 +218,7 @@ export default function MonitorPage({ params }) {
           ...previous,
           [sector]: {
             ...queue,
-            history: formattedHistory,
+            history: clean,
           },
         });
       } catch (err) {
@@ -200,12 +267,13 @@ export default function MonitorPage({ params }) {
           }).format(new Date(call.created_at || Date.now()));
 
           const newCallObj = {
+            id: call.id,
             number: call.number_int,
             type: callTypeFormatted,
             time: timeStr,
           };
 
-          const nextHistory = [newCallObj, ...currentHistory].slice(0, 10);
+          const nextHistory = cleanHistory([newCallObj, ...currentHistory]).slice(0, 30);
 
           saveQueueState({
             ...previous,
@@ -216,11 +284,7 @@ export default function MonitorPage({ params }) {
             },
           });
 
-          const textToSpeak = `Senha ${formatQueueNumber(
-            call.number_int,
-            callTypeFormatted
-          )}, dirigir-se ao atendimento.`;
-
+          const textToSpeak = buildSpeechText(call.number_int, callTypeFormatted);
           speakText(textToSpeak);
         }
       )
@@ -234,18 +298,42 @@ export default function MonitorPage({ params }) {
   const info = SECTORS[sector] || SECTORS.farmacia;
   const current = state[sector] || state.farmacia || { normalCurrent: 0, history: [] };
 
-  const history = current.history || [];
+  const validHistory = cleanHistory(current.history || []);
 
-  const latest = history[0] || {
+  const latest = validHistory[0] || {
     number: current.normalCurrent || 0,
     type: "normal",
   };
 
-  // Garante exatamente 4 itens na lista do histórico
-  const recentCalls = history.slice(1, 5);
+  const recentCalls = validHistory.slice(1, 5);
 
   return (
     <main className={styles.monitor}>
+      {!audioEnabled && (
+        <button
+          onClick={enableAudio}
+          style={{
+            position: "fixed",
+            top: 16,
+            right: 16,
+            zIndex: 9999,
+            padding: "12px 20px",
+            backgroundColor: "#22c55e",
+            color: "#ffffff",
+            border: "none",
+            borderRadius: "8px",
+            cursor: "pointer",
+            fontWeight: "bold",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
+          }}
+        >
+          <Volume2 size={20} /> Clique para Ativar Áudio das Chamadas
+        </button>
+      )}
+
       <header className={styles.header}>
         <div className={styles.sectorTitle}>{info.name.toUpperCase()}</div>
         <div className={styles.heading}>
@@ -277,12 +365,16 @@ export default function MonitorPage({ params }) {
             }`}
           >
             <p>SENHA</p>
-            <strong>{formatQueueNumber(latest.number, latest.type)}</strong>
-            <span>
-              {latest.type === "preferencial"
-                ? "ATENDIMENTO PREFERENCIAL"
-                : "ATENDIMENTO"}
-            </span>
+            <strong>{formatMonitorNumber(latest.number)}</strong>
+            
+            {latest.type === "preferencial" ? (
+              <span className={styles.priorityTag}>
+                ATENDIMENTO PREFERENCIAL
+              </span>
+            ) : (
+              <span>ATENDIMENTO</span>
+            )}
+            
             <small>Dirija-se ao balcão de atendimento</small>
           </section>
 
@@ -292,7 +384,7 @@ export default function MonitorPage({ params }) {
               recentCalls.map((item, index) => (
                 <div
                   className={styles.historyItem}
-                  key={`${item.number}-${item.type}-${index}`}
+                  key={`${item.id || item.number}-${item.type}-${index}`}
                 >
                   <strong
                     className={
@@ -301,19 +393,17 @@ export default function MonitorPage({ params }) {
                         : styles.normalNumber
                     }
                   >
-                    {formatQueueNumber(item.number, item.type)}
+                    {formatMonitorNumber(item.number)}
                   </strong>
-                  <span
-                    className={
-                      item.type === "preferencial"
-                        ? styles.priority
-                        : styles.normal
-                    }
-                  >
-                    {item.type === "preferencial"
-                      ? "PREFERENCIAL"
-                      : "ATENDIMENTO"}
-                  </span>
+                  
+                  {item.type === "preferencial" ? (
+                    <span className={styles.priorityTagSmall}>
+                      PREFERENCIAL
+                    </span>
+                  ) : (
+                    <span className={styles.normal}>ATENDIMENTO</span>
+                  )}
+
                   <time>{item.time}</time>
                 </div>
               ))

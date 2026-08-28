@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { isSupabaseConfigured, supabase } from "../../../../lib/supabase";
 
 function formatNumberString(num, type) {
-  const prefix = type === "preferential" || type === "preferencial" ? "P" : "N";
+  const prefix = type === "preferencial" || type === "preferential" ? "P" : "N";
   return `${prefix}${String(num).padStart(3, "0")}`;
 }
 
@@ -15,14 +15,20 @@ export async function POST(request) {
       return NextResponse.json({ error: "Setor não informado." }, { status: 400 });
     }
 
-    const typeFormatted =
+    // Normaliza para 'preferencial' e 'normal' exatamente como exigido pela constraint da tabela
+    const dbCallType =
+      type === "preferential" || type === "preferencial"
+        ? "preferencial"
+        : "normal";
+
+    const dbTypeCalls =
       type === "preferential" || type === "preferencial"
         ? "preferential"
         : "normal";
 
     if (!isSupabaseConfigured || !supabase) {
       const nextNum = Math.floor(Math.random() * 100) + 1;
-      return NextResponse.json({ success: true, number: nextNum, type: typeFormatted });
+      return NextResponse.json({ success: true, number: nextNum, type: dbCallType });
     }
 
     // 1. Busca sequências existentes para o setor
@@ -40,23 +46,23 @@ export async function POST(request) {
     let currentNum = 0;
     if (seqData) {
       currentNum =
-        typeFormatted === "preferential"
+        dbCallType === "preferencial"
           ? seqData.priority_current || 0
           : seqData.normal_current || 0;
     }
 
     const nextNum = currentNum >= 1000 ? 1 : currentNum + 1;
-    const numberStr = formatNumberString(nextNum, typeFormatted);
+    const numberStr = formatNumberString(nextNum, dbCallType);
     const fieldToUpdate =
-      typeFormatted === "preferential" ? "priority_current" : "normal_current";
+      dbCallType === "preferencial" ? "priority_current" : "normal_current";
 
-    // 2. Atualiza ou cria o registro em queue_sequences
+    // 2. Atualiza ou cria o registro em queue_sequences enviando dbCallType correto ('preferencial' / 'normal')
     if (seqData) {
       const { error: updateError } = await supabase
         .from("queue_sequences")
         .update({
           [fieldToUpdate]: nextNum,
-          call_type: typeFormatted,
+          call_type: dbCallType,
           updated_at: new Date().toISOString(),
         })
         .eq("sector_id", sector);
@@ -69,9 +75,9 @@ export async function POST(request) {
         .from("queue_sequences")
         .insert({
           sector_id: sector,
-          call_type: typeFormatted,
-          normal_current: typeFormatted === "normal" ? nextNum : 0,
-          priority_current: typeFormatted === "preferential" ? nextNum : 0,
+          call_type: dbCallType,
+          normal_current: dbCallType === "normal" ? nextNum : 0,
+          priority_current: dbCallType === "preferencial" ? nextNum : 0,
         });
 
       if (insertSeqError) {
@@ -79,11 +85,11 @@ export async function POST(request) {
       }
     }
 
-    // 3. Registra em queue_calls preenchendo number_str e number_int
+    // 3. Registra em queue_calls
     const { error: callError } = await supabase.from("queue_calls").insert({
       sector_id: sector,
-      type: typeFormatted,
-      call_type: typeFormatted,
+      type: dbTypeCalls,
+      call_type: dbCallType,
       number_int: nextNum,
       number_str: numberStr,
       attendant_id: attendantId || null,
@@ -98,7 +104,7 @@ export async function POST(request) {
       success: true,
       number: nextNum,
       numberStr,
-      type: typeFormatted,
+      type: dbCallType,
     });
   } catch (err) {
     console.error("Erro interno na rota /api/queue/call:", err);
