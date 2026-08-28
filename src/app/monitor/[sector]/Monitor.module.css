@@ -141,16 +141,17 @@
 
 .featured > span {
   margin-top: 12px;
-  color: #ffffff;
+  color: #1972a0;
   font-size: 14px;
   font-weight: 800;
   letter-spacing: 1.5px;
 }
 
-/* TAG DE ATENDIMENTO PREFERENCIAL (FUNDO VERMELHO, TEXTO PRETO E CANTOS ARREDONDADOS) */
+/* TAG DE ATENDIMENTO PREFERENCIAL NO DESTAQUE (SOBRESCREVE .featured > span) */
+.featured > span.priorityTag,
 .priorityTag {
   background-color: #ef4444;
-  color: #000000;
+  color: #FFFFFF !important;
   padding: 10px 24px;
   border-radius: 12px;
   font-weight: 800;
@@ -160,13 +161,16 @@
   box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3);
 }
 
+/* TAG PREFERENCIAL NA LISTA DE ÚLTIMAS SENHAS */
 .priorityTagSmall {
   background-color: #ef4444;
-  color: #FFF;
+  color: #000000 !important;
   padding: 4px 12px;
   border-radius: 8px;
   font-weight: bold;
   font-size: 0.85rem;
+  display: inline-block;
+  text-align: center;
 }
 
 .featured small {

@@ -47,7 +47,7 @@ let dashboardUtterance = null;
 function buildSpeechText(number, type) {
   const numInt = Number(number) || 0;
   if (type === "preferencial") {
-    return `Pê. ${numInt}.`;
+    return `Preferencial, ${numInt}.`;
   }
   return `${numInt}.`;
 }
@@ -93,7 +93,6 @@ export default function DashboardPage() {
     };
   }, [router]);
 
-  // Atualizações do realtime sem disparo de áudio redundante
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !session?.sector) return;
 
@@ -185,7 +184,7 @@ export default function DashboardPage() {
         window.speechSynthesis.speak(dashboardUtterance);
       }, 100);
     } catch {
-      // Ignora erros secundários
+      // Ignora falhas secundárias
     }
   };
 

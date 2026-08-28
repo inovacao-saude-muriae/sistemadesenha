@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState, useSyncExternalStore } from "react";
+import { use, useEffect, useState, useSyncExternalStore, memo } from "react";
 import Image from "next/image";
 import { Clock3, Volume2 } from "lucide-react";
 import {
@@ -20,6 +20,7 @@ const monitorServerSnapshot = {
 };
 
 let currentUtterance = null;
+let lastSpokenCallId = null; // Trava para impedir repetição da mesma chamada
 
 function getNewsSnapshot() {
   if (typeof window === "undefined") return serverNewsSnapshot;
@@ -45,7 +46,7 @@ function formatMonitorNumber(number) {
 function buildSpeechText(number, type) {
   const numInt = Number(number) || 0;
   if (type === "preferencial") {
-    return `Pê. ${numInt}.`;
+    return `Preferencial, ${numInt}.`;
   }
   return `${numInt}.`;
 }
@@ -87,7 +88,7 @@ function speakText(text) {
       };
 
       window.speechSynthesis.speak(currentUtterance);
-    }, 100);
+    }, 120);
   } catch (e) {
     console.error("Erro na síntese de voz:", e);
   }
@@ -109,6 +110,69 @@ function cleanHistory(history = []) {
   return result;
 }
 
+// COMPONENTE ISOLADO DO SLIDE (Impede a re-renderização da voz ao passar imagens)
+const NewsCarousel = memo(function NewsCarousel() {
+  const news = useSyncExternalStore(
+    subscribeNews,
+    getNewsSnapshot,
+    () => serverNewsSnapshot
+  );
+  const [newsIndex, setNewsIndex] = useState(0);
+
+  useEffect(() => {
+    fetch("/api/news")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data?.news || !data.news.length) return;
+        newsSnapshot = data.news;
+        window.dispatchEvent(new Event("news-updated"));
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!news || news.length === 0) return;
+
+    const newsTimer = setInterval(() => {
+      setNewsIndex((prevIndex) => (prevIndex + 1) % news.length);
+    }, 5000);
+
+    return () => clearInterval(newsTimer);
+  }, [news]);
+
+  if (!news || news.length === 0) {
+    return (
+      <div className={styles.emptyNews}>
+        <strong>INFORMAÇÕES DA UNIDADE</strong>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {news[newsIndex]?.image && (
+        <Image
+          src={news[newsIndex].image}
+          alt=""
+          fill
+          unoptimized
+          sizes="(max-width: 900px) 100vw, 60vw"
+        />
+      )}
+      <div className={styles.newsCaption}>
+        <div className={styles.dots}>
+          {news.map((item, index) => (
+            <i
+              className={index === newsIndex ? styles.activeDot : ""}
+              key={(item.title || index) + index}
+            />
+          ))}
+        </div>
+      </div>
+    </>
+  );
+});
+
 export default function MonitorPage({ params }) {
   const resolvedParams = params ? (params.then ? use(params) : params) : {};
   const sector = resolvedParams?.sector || "farmacia";
@@ -118,14 +182,8 @@ export default function MonitorPage({ params }) {
     getQueueSnapshot,
     () => monitorServerSnapshot
   );
-  const news = useSyncExternalStore(
-    subscribeNews,
-    getNewsSnapshot,
-    () => serverNewsSnapshot
-  );
 
   const [time, setTime] = useState("");
-  const [newsIndex, setNewsIndex] = useState(0);
   const [audioEnabled, setAudioEnabled] = useState(false);
 
   useEffect(() => {
@@ -149,17 +207,6 @@ export default function MonitorPage({ params }) {
   };
 
   useEffect(() => {
-    fetch("/api/news")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!data?.news || !data.news.length) return;
-        newsSnapshot = data.news;
-        window.dispatchEvent(new Event("news-updated"));
-      })
-      .catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
     const clockTimer = setInterval(() => {
       setTime(
         new Intl.DateTimeFormat("pt-BR", {
@@ -172,16 +219,6 @@ export default function MonitorPage({ params }) {
 
     return () => clearInterval(clockTimer);
   }, []);
-
-  useEffect(() => {
-    if (!news || news.length === 0) return;
-
-    const newsTimer = setInterval(() => {
-      setNewsIndex((prevIndex) => (prevIndex + 1) % news.length);
-    }, 5000);
-
-    return () => clearInterval(newsTimer);
-  }, [news]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !sector) return;
@@ -242,6 +279,11 @@ export default function MonitorPage({ params }) {
           const call = payload.new;
           if (!call || !call.number_int) return;
 
+          // Impede re-execução da mesma chamada pelo ID
+          const callKey = `${call.id || call.number_int}-${call.type}`;
+          if (lastSpokenCallId === callKey) return;
+          lastSpokenCallId = callKey;
+
           const previous = getQueueSnapshot() || monitorServerSnapshot;
           const queue = previous[sector] || {};
           const callTypeFormatted =
@@ -252,14 +294,6 @@ export default function MonitorPage({ params }) {
             callTypeFormatted === "preferencial" ? "priorityCurrent" : "normalCurrent";
 
           const currentHistory = queue.history || [];
-
-          if (
-            currentHistory.length > 0 &&
-            currentHistory[0].number === call.number_int &&
-            currentHistory[0].type === callTypeFormatted
-          ) {
-            return;
-          }
 
           const timeStr = new Intl.DateTimeFormat("pt-BR", {
             hour: "2-digit",
@@ -366,7 +400,7 @@ export default function MonitorPage({ params }) {
           >
             <p>SENHA</p>
             <strong>{formatMonitorNumber(latest.number)}</strong>
-            
+
             {latest.type === "preferencial" ? (
               <span className={styles.priorityTag}>
                 ATENDIMENTO PREFERENCIAL
@@ -374,7 +408,7 @@ export default function MonitorPage({ params }) {
             ) : (
               <span>ATENDIMENTO</span>
             )}
-            
+
             <small>Dirija-se ao balcão de atendimento</small>
           </section>
 
@@ -395,7 +429,7 @@ export default function MonitorPage({ params }) {
                   >
                     {formatMonitorNumber(item.number)}
                   </strong>
-                  
+
                   {item.type === "preferencial" ? (
                     <span className={styles.priorityTagSmall}>
                       PREFERENCIAL
@@ -416,33 +450,7 @@ export default function MonitorPage({ params }) {
         </section>
 
         <section className={styles.news}>
-          {news?.length ? (
-            <>
-              {news[newsIndex]?.image && (
-                <Image
-                  src={news[newsIndex].image}
-                  alt=""
-                  fill
-                  unoptimized
-                  sizes="(max-width: 900px) 100vw, 60vw"
-                />
-              )}
-              <div className={styles.newsCaption}>
-                <div className={styles.dots}>
-                  {news.map((item, index) => (
-                    <i
-                      className={index === newsIndex ? styles.activeDot : ""}
-                      key={(item.title || index) + index}
-                    />
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className={styles.emptyNews}>
-              <strong>INFORMAÇÕES DA UNIDADE</strong>
-            </div>
-          )}
+          <NewsCarousel />
         </section>
       </div>
     </main>
