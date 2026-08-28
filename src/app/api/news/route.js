@@ -27,10 +27,8 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    return Response.json(
-      { error: error.message || "Erro ao carregar notícias." },
-      { status: 500 }
-    );
+    console.error("Erro ao carregar notícias:", error);
+    return Response.json({ news: [] });
   }
 }
 

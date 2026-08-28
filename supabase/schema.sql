@@ -92,5 +92,41 @@ create policy "sector calls are private" on public.queue_calls for select to aut
 create policy "attendants insert calls" on public.queue_calls for insert to authenticated with check (sector_id = public.my_sector() and called_by = auth.uid());
 create policy "users manage own settings" on public.settings for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 
+drop policy if exists "monitors can read calls" on public.queue_calls;
+create policy "monitors can read calls" on public.queue_calls for select using (true);
+
+create or replace function public.call_queue(p_sector_id text, p_call_type text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  next_num integer;
+  normalized text;
+begin
+  normalized := case
+    when p_call_type in ('preferencial', 'preferential') then 'preferencial'
+    else 'normal'
+  end;
+
+  insert into public.queue_sequences (sector_id, call_type, current_number, updated_at)
+  values (p_sector_id, normalized, 1, now())
+  on conflict (sector_id, call_type)
+  do update set
+    current_number = case
+      when public.queue_sequences.current_number >= 1000 then 1
+      else public.queue_sequences.current_number + 1
+    end,
+    updated_at = now()
+  returning current_number into next_num;
+
+  return jsonb_build_object('number', next_num, 'call_type', normalized);
+end;
+$$;
+
+revoke all on function public.call_queue(text, text) from public;
+grant execute on function public.call_queue(text, text) to service_role;
+
 alter table public.queue_calls replica identity full;
 alter publication supabase_realtime add table public.queue_calls;

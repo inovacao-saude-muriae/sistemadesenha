@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState, useSyncExternalStore, memo } from "react";
+import { use, useEffect, useRef, useState, useSyncExternalStore, memo } from "react";
 import Image from "next/image";
 import { Clock3, Volume2 } from "lucide-react";
 import {
@@ -10,6 +10,13 @@ import {
   subscribeQueue,
 } from "../../../lib/queue";
 import { isSupabaseConfigured, supabase } from "../../../lib/supabase";
+import {
+  announceQueueCall,
+  registerMonitorSpeaker,
+  speakText,
+  unlockSpeech,
+  isMonitorSpeakerActive,
+} from "../../../lib/speech";
 import styles from "./Monitor.module.css";
 
 let newsSnapshot = [];
@@ -19,8 +26,7 @@ const monitorServerSnapshot = {
   recepcao: { normalCurrent: 0, priorityCurrent: 0, history: [] },
 };
 
-let currentUtterance = null;
-let lastSpokenCallId = null; // Trava para impedir repetição da mesma chamada
+let lastSpokenCallId = null;
 
 function getNewsSnapshot() {
   if (typeof window === "undefined") return serverNewsSnapshot;
@@ -41,57 +47,6 @@ function formatMonitorNumber(number) {
   const numInt = Number(number) || 0;
   if (numInt === 1000) return "1000";
   return String(numInt).padStart(3, "0");
-}
-
-function buildSpeechText(number, type) {
-  const numInt = Number(number) || 0;
-  if (type === "preferencial") {
-    return `Preferencial, ${numInt}.`;
-  }
-  return `${numInt}.`;
-}
-
-function speakText(text) {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-
-  try {
-    if (window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
-    }
-    window.speechSynthesis.cancel();
-
-    setTimeout(() => {
-      currentUtterance = new SpeechSynthesisUtterance(text);
-      currentUtterance.lang = "pt-BR";
-      currentUtterance.rate = 0.85;
-      currentUtterance.pitch = 1.0;
-
-      const voices = window.speechSynthesis.getVoices();
-      const ptVoice = voices.find(
-        (v) =>
-          v.lang === "pt-BR" ||
-          v.lang === "pt_BR" ||
-          v.name.includes("Brazil") ||
-          v.name.includes("Portuguese")
-      );
-
-      if (ptVoice) {
-        currentUtterance.voice = ptVoice;
-      }
-
-      currentUtterance.onend = () => {
-        currentUtterance = null;
-      };
-
-      currentUtterance.onerror = () => {
-        currentUtterance = null;
-      };
-
-      window.speechSynthesis.speak(currentUtterance);
-    }, 120);
-  } catch (e) {
-    console.error("Erro na síntese de voz:", e);
-  }
 }
 
 function cleanHistory(history = []) {
@@ -185,24 +140,18 @@ export default function MonitorPage({ params }) {
 
   const [time, setTime] = useState("");
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const audioEnabledRef = useRef(false);
+  audioEnabledRef.current = audioEnabled;
 
   useEffect(() => {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      const loadVoices = () => {
-        window.speechSynthesis.getVoices();
-      };
-      loadVoices();
-      if (window.speechSynthesis.onvoiceschanged !== undefined) {
-        window.speechSynthesis.onvoiceschanged = loadVoices;
-      }
-    }
-  }, []);
+    if (!audioEnabled) return undefined;
+    unlockSpeech();
+    return registerMonitorSpeaker();
+  }, [audioEnabled]);
 
   const enableAudio = () => {
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.resume();
-      speakText("Som ativado");
-    }
+    unlockSpeech();
+    speakText("Som ativado.");
     setAudioEnabled(true);
   };
 
@@ -318,8 +267,13 @@ export default function MonitorPage({ params }) {
             },
           });
 
-          const textToSpeak = buildSpeechText(call.number_int, callTypeFormatted);
-          speakText(textToSpeak);
+          // O BroadcastChannel já entrega a fala para o monitor quando ele
+          // está registrado como speaker. Chamar announceQueueCall aqui também
+          // causaria dupla fala. Só anunciamos via Realtime se o monitor
+          // ainda NÃO está registrado como speaker (ex: aba recém aberta).
+          if (audioEnabledRef.current && !isMonitorSpeakerActive()) {
+            announceQueueCall(call.number_int, callTypeFormatted);
+          }
         }
       )
       .subscribe();

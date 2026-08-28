@@ -31,6 +31,7 @@ import {
   withQueueLock,
 } from "../../lib/queue";
 import { isSupabaseConfigured, supabase } from "../../lib/supabase";
+import { announceQueueCall, forceAnnounce, initSpeechClient, unlockSpeech } from "../../lib/speech";
 import styles from "./Dashboard.module.css";
 
 const emptySubscribe = () => () => {};
@@ -40,16 +41,6 @@ function useIsClient() {
     () => true,
     () => false
   );
-}
-
-let dashboardUtterance = null;
-
-function buildSpeechText(number, type) {
-  const numInt = Number(number) || 0;
-  if (type === "preferencial") {
-    return `Preferencial, ${numInt}.`;
-  }
-  return `${numInt}.`;
 }
 
 export default function DashboardPage() {
@@ -92,6 +83,17 @@ export default function DashboardPage() {
       window.clearInterval(timer);
     };
   }, [router]);
+
+  useEffect(() => {
+    initSpeechClient();
+    const unlock = () => unlockSpeech();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !session?.sector) return;
@@ -162,32 +164,6 @@ export default function DashboardPage() {
   const current = normalizeQueue(state[sector]);
   const sectorInfo = SECTORS[sector] || SECTORS.farmacia;
 
-  const speakDashboard = (text) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    try {
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
-      window.speechSynthesis.cancel();
-
-      setTimeout(() => {
-        dashboardUtterance = new SpeechSynthesisUtterance(text);
-        dashboardUtterance.lang = "pt-BR";
-        dashboardUtterance.rate = 0.85;
-
-        const voices = window.speechSynthesis.getVoices();
-        const ptVoice = voices.find(
-          (v) => v.lang === "pt-BR" || v.lang === "pt_BR" || v.lang.startsWith("pt")
-        );
-        if (ptVoice) dashboardUtterance.voice = ptVoice;
-
-        window.speechSynthesis.speak(dashboardUtterance);
-      }, 100);
-    } catch {
-      // Ignora falhas secundárias
-    }
-  };
-
   const callNext = useCallback(
     async (type) => {
       if (calling) return;
@@ -208,14 +184,25 @@ export default function DashboardPage() {
           });
           const data = await response.json();
           if (!response.ok) {
-            setNotice(data.error || "Erro ao conectar à sequência central.");
-            next = null;
+            if (data.useLocal) {
+              const latestState = readQueueState();
+              const latest = normalizeQueue(latestState[sector]);
+              next =
+                type === "preferencial"
+                  ? nextQueueNumber(latest.priorityCurrent)
+                  : nextQueueNumber(latest.normalCurrent);
+            } else {
+              setNotice(data.error || "Erro ao conectar à sequência central.");
+              next = null;
+            }
           } else {
-            next = data.number;
+            next = Number(data.number);
           }
         } catch {
           next = null;
         }
+
+        next = Number(next);
 
         if (!Number.isInteger(next) || next < 1 || next > 1000) {
           setNotice("Não foi possível conectar à sequência central.");
@@ -223,14 +210,36 @@ export default function DashboardPage() {
           return;
         }
 
+        const latestState = readQueueState();
+        const latest = normalizeQueue(latestState[sector]);
+        const field =
+          type === "preferencial" ? "priorityCurrent" : "normalCurrent";
+        saveQueueState({
+          ...latestState,
+          [sector]: {
+            ...latest,
+            [field]: next,
+            history: [
+              {
+                number: next,
+                type,
+                time: new Intl.DateTimeFormat("pt-BR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }).format(new Date()),
+              },
+              ...latest.history,
+            ].slice(0, 10),
+          },
+        });
+
         setNotice(
           type === "preferencial"
             ? "Senha preferencial chamada"
             : "Senha normal chamada"
         );
 
-        const textToSpeak = buildSpeechText(next, type);
-        speakDashboard(textToSpeak);
+        announceQueueCall(next, type);
       });
 
       setCalling(false);
@@ -247,8 +256,8 @@ export default function DashboardPage() {
 
     setNotice(`Chamando novamente: ${formatQueueNumber(lastItem.number, lastItem.type)}`);
 
-    const textToSpeak = buildSpeechText(lastItem.number, lastItem.type);
-    speakDashboard(textToSpeak);
+    // forceAnnounce ignora a deduplicação para garantir que a repetição seja falada
+    forceAnnounce(lastItem.number, lastItem.type);
   }, [current.history]);
 
   const handleClearHistory = () => {

@@ -30,7 +30,7 @@ export async function POST(request) {
     ];
     if (
       !name?.trim() ||
-      !/^[a-z0-9-]+$/.test(normalizedLogin) ||
+      !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(normalizedLogin) ||
       String(password || "").length < 6 ||
       !["farmacia", "recepcao"].includes(sector) ||
       !validGuiches.includes(guiche)

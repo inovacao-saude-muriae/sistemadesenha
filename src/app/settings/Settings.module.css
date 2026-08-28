@@ -1,1 +1,106 @@
-.page{min-height:100vh;background:#f4f7fb;color:#17324d}.page header{height:80px;background:#0b3555;color:#fff;padding:0 7vw;display:flex;align-items:center;justify-content:space-between;font-size:12px;letter-spacing:1.4px}.page header a{color:#c4dbe5;text-decoration:none;display:flex;gap:8px;align-items:center;letter-spacing:0}.content{max-width:680px;margin:60px auto;padding:38px;background:#fff;border:1px solid #dce8ed;border-radius:13px;box-shadow:0 14px 35px #1b567214}.kicker{font-size:10px;color:#7895a3;letter-spacing:1.5px;font-weight:800}.content h1{font-size:30px;color:#123b56;margin:9px 0 7px}.description{color:#78909e;font-size:13px;margin-bottom:35px}.content form{border-top:1px solid #e8eff2;padding-top:28px}.content label{display:block;color:#466879;font-size:11px;font-weight:800;letter-spacing:.8px}.content input{display:block;width:100%;margin-top:9px;border:1px solid #cadde5;border-radius:7px;padding:14px;color:#153d56;font-size:18px;outline-color:#20aa99}.help{font-size:12px;color:#8197a3;margin-top:10px}.actions{display:flex;gap:12px;margin-top:27px}.actions button{border:0;border-radius:7px;padding:13px 16px;display:flex;gap:8px;align-items:center;font-weight:800;cursor:pointer}.save{background:#0d7196;color:#fff}.reset{background:#e9f5f4;color:#168879}.message{margin-top:23px;padding:13px;background:#ecfaf6;color:#168b79;border-radius:7px;font-size:12px;display:flex;gap:8px;align-items:center}@media(max-width:600px){.page header{padding:0 18px}.content{margin:25px 18px;padding:25px}.actions{display:grid}.actions button{justify-content:center}}
+.page {
+  min-height: 100vh;
+  background: #f4f7fb;
+  color: #173b51;
+}
+.page header {
+  height: 76px;
+  padding: 0 7vw;
+  background: #0b3555;
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.page header a {
+  color: #c7dce5;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.content {
+  max-width: 640px;
+  margin: 45px auto;
+  padding: 0 24px 48px;
+}
+.kicker {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: #7895a3;
+  font-weight: 800;
+}
+.content h1 {
+  font-size: 32px;
+  color: #123b56;
+  margin: 8px 0 10px;
+}
+.description,
+.help {
+  color: #78909e;
+  font-size: 13px;
+}
+.content form {
+  margin-top: 28px;
+  background: #fff;
+  border: 1px solid #dde9ed;
+  border-radius: 12px;
+  padding: 26px;
+  display: grid;
+  gap: 18px;
+}
+.content label {
+  display: grid;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #416477;
+  letter-spacing: 0.4px;
+}
+.content input {
+  border: 1px solid #d3e1e6;
+  border-radius: 7px;
+  padding: 12px;
+  font: inherit;
+  font-size: 16px;
+}
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.save,
+.reset {
+  border: 0;
+  border-radius: 7px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.save {
+  background: #0d7196;
+  color: #fff;
+}
+.reset {
+  background: #fff0e2;
+  color: #ad681e;
+}
+.message {
+  margin-top: 18px;
+  background: #effaf7;
+  color: #199685;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}

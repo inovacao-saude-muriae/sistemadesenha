@@ -15,6 +15,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import {
+  getQueueSnapshot,
   getServerQueueSnapshot,
   getServerSessionSnapshot,
   getSessionSnapshot,
@@ -23,6 +24,7 @@ import {
   saveQueueState,
   SECTORS,
   SESSION_KEY,
+  subscribeQueue,
   subscribeSession,
 } from "../../lib/queue";
 import styles from "./Admin.module.css";
@@ -55,7 +57,11 @@ export default function AdminPage() {
     getSessionSnapshot,
     getServerSessionSnapshot
   );
-  const [state, setState] = useState(getServerQueueSnapshot);
+  const state = useSyncExternalStore(
+    subscribeQueue,
+    getQueueSnapshot,
+    getServerQueueSnapshot
+  );
   const news = useSyncExternalStore(
     subscribeNews,
     getNewsSnapshot,
@@ -115,24 +121,28 @@ export default function AdminPage() {
 
     try {
       // Zera o estado local
+      const currentState = getQueueSnapshot();
       const next = {
-        ...state,
+        ...currentState,
         [sectorId]: {
-          ...normalizeQueue(state[sectorId]),
+          ...normalizeQueue(currentState[sectorId]),
           normalCurrent: 0,
           priorityCurrent: 0,
           history: [],
         },
       };
-      setState(next);
       saveQueueState(next);
 
-      // Envia comando para zerar a sequência no Banco de Dados (Supabase)
-      await fetch("/api/queue/reset", {
+      const response = await fetch("/api/queue/reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sector: sectorId }),
       });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok && !data.localOnly) {
+        setMessage(data.error || "Ocorreu um erro ao zerar o contador no banco de dados.");
+        return;
+      }
 
       setMessage(`Contador do setor ${SECTORS[sectorId]?.name} zerado com sucesso.`);
     } catch {

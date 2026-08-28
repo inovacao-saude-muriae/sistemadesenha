@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LockKeyhole, ShieldCheck } from "lucide-react";
@@ -71,7 +70,6 @@ export default function LoginPage() {
         <div className={styles.secure}>
           <ShieldCheck size={16} /> O login abre o setor vinculado à conta
         </div>
-        <Link href="/">Voltar para início</Link>
       </section>
     </main>
   );

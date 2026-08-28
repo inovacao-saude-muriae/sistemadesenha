@@ -1,7 +1,19 @@
-import { supabase, isSupabaseConfigured } from "../../../lib/supabase";
+import { createAuthClient, isSupabaseConfigured } from "../../../lib/supabase";
+import {
+  isSupabaseAdminConfigured,
+  supabaseAdmin,
+} from "../../../lib/supabase-admin";
 
 export async function POST(request) {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isSupabaseConfigured) {
+    return Response.json(
+      { error: "Supabase não está configurado." },
+      { status: 503 },
+    );
+  }
+
+  const supabase = createAuthClient();
+  if (!supabase) {
     return Response.json(
       { error: "Supabase não está configurado." },
       { status: 503 },
@@ -23,7 +35,9 @@ export async function POST(request) {
         { status: 401 },
       );
 
-    const { data: profile, error: profileError } = await supabase
+    const profileClient =
+      isSupabaseAdminConfigured && supabaseAdmin ? supabaseAdmin : supabase;
+    const { data: profile, error: profileError } = await profileClient
       .from("profiles")
       .select("full_name, role, sector_id, guiche_id, active")
       .eq("id", data.user.id)
@@ -34,6 +48,7 @@ export async function POST(request) {
         { status: 403 },
       );
     return Response.json({
+      id: data.user.id,
       name: profile.full_name,
       initials: profile.full_name
         .split(/\s+/)

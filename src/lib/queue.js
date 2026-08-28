@@ -36,12 +36,14 @@ let clientSessionRaw = null;
 
 export const ATTENDANT_ACCOUNTS = {
   admin: {
+    id: "local-admin",
     name: "Administradora",
     initials: "AD",
     role: "admin",
     password: "admin123",
   },
   "recepcao.atendimento": {
+    id: "local-recepcao",
     name: "Atendimento Recepção",
     initials: "RC",
     sector: "recepcao",
@@ -49,6 +51,7 @@ export const ATTENDANT_ACCOUNTS = {
     password: "recepcao123",
   },
   "farmacia.atendimento": {
+    id: "local-farmacia",
     name: "Atendimento Farmácia",
     initials: "FM",
     sector: "farmacia",
@@ -174,10 +177,11 @@ export async function withQueueLock(callback) {
   const lockKey = `${QUEUE_KEY}-lock`;
   const token = `${Date.now()}-${Math.random()}`;
   while (true) {
-    const lock = Number(window.localStorage.getItem(lockKey) || 0);
-    if (!lock || Date.now() - lock > 3000) {
+    const raw = window.localStorage.getItem(lockKey) || "";
+    const lockTime = Number(String(raw).split(":")[0] || 0);
+    if (!lockTime || Date.now() - lockTime > 3000) {
       window.localStorage.setItem(lockKey, `${Date.now()}:${token}`);
-      if (window.localStorage.getItem(lockKey).endsWith(token)) break;
+      if (window.localStorage.getItem(lockKey)?.endsWith(token)) break;
     }
     await new Promise((resolve) => window.setTimeout(resolve, 40));
   }
