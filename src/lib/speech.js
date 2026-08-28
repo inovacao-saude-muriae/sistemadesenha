@@ -1,36 +1,31 @@
-const CHANNEL_NAME = "saude-tts";
+const CHANNEL_NAME      = "saude-tts";
 const MONITOR_HEARTBEAT_MS = 2000;
+const DEDUP_WINDOW_MS   = 10000;
 
 // ─── Estado do módulo ──────────────────────────────────────────────────────────
-let speakGeneration = 0;
-let speakTimer      = 0;
-let resumeTimer     = 0;
-let voicesReady     = false;
-let channel         = null;
+// Dois contadores de geração SEPARADOS para evitar que speakNow e speakWithAlert
+// se cancelem mutuamente (principal causa de silêncio após "Som ativado.").
+let simpleGeneration = 0;   // usado por speakNow  (mensagens de sistema)
+let alertGeneration  = 0;   // usado por speakWithAlert (chamadas de senha)
+
+let simpleTimer = 0;
+let alertTimer  = 0;
+let resumeTimer = 0;
+let voicesReady = false;
+let channel     = null;
 let monitorHeartbeatAt = 0;
 let isMonitorSpeaker   = false;
 
-// Deduplicação — janela de 10 s para absorver qualquer atraso de rede
 let lastSpokenKey = "";
 let lastSpokenAt  = 0;
-const DEDUP_WINDOW_MS = 10000;
 
-// ─── BroadcastChannel ─────────────────────────────────────────────────────────
-// Usado apenas para heartbeat: o monitor avisa "estou aberto nesta máquina".
-// O dashboard usa isso para saber se deve falar localmente ou não.
-// NÃO funciona entre máquinas diferentes — por isso o dashboard sempre fala
-// como fallback quando não detecta monitor na mesma máquina.
+// ─── BroadcastChannel (heartbeat apenas) ─────────────────────────────────────
 function getChannel() {
-  if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") {
-    return null;
-  }
+  if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") return null;
   if (!channel) {
     channel = new BroadcastChannel(CHANNEL_NAME);
     channel.onmessage = (event) => {
-      const data = event.data || {};
-      if (data.type === "monitor-here") {
-        monitorHeartbeatAt = Date.now();
-      }
+      if ((event.data || {}).type === "monitor-here") monitorHeartbeatAt = Date.now();
     };
   }
   return channel;
@@ -66,13 +61,12 @@ function numberToPt(value) {
 export function buildSpeechText(number, type) {
   const n      = Number(number) || 0;
   const spoken = numberToPt(n);
-  if (type === "preferencial" || type === "preferential") {
-    return `Senha preferencial. ${spoken}.`;
-  }
-  return `Senha. ${spoken}.`;
+  return (type === "preferencial" || type === "preferential")
+    ? `Senha preferencial. ${spoken}.`
+    : `Senha. ${spoken}.`;
 }
 
-// ─── Seleção de voz ───────────────────────────────────────────────────────────
+// ─── Voz pt-BR ────────────────────────────────────────────────────────────────
 function pickVoice() {
   const voices = window.speechSynthesis.getVoices() || [];
   return (
@@ -85,14 +79,9 @@ function pickVoice() {
 
 // ─── Inicialização de vozes ───────────────────────────────────────────────────
 function waitForVoices() {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-    return Promise.resolve();
-  }
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return Promise.resolve();
   const voices = window.speechSynthesis.getVoices();
-  if (voices.length || voicesReady) {
-    voicesReady = true;
-    return Promise.resolve();
-  }
+  if (voices.length || voicesReady) { voicesReady = true; return Promise.resolve(); }
   return new Promise((resolve) => {
     const done = () => { voicesReady = true; resolve(); };
     window.speechSynthesis.addEventListener("voiceschanged", done, { once: true });
@@ -104,13 +93,32 @@ function waitForVoices() {
 function stopResumeWatch() {
   if (resumeTimer) { window.clearInterval(resumeTimer); resumeTimer = 0; }
 }
-
 function startResumeWatch() {
   stopResumeWatch();
   resumeTimer = window.setInterval(() => {
     if (!window.speechSynthesis.speaking) { stopResumeWatch(); return; }
     window.speechSynthesis.resume();
   }, 3000);
+}
+
+// ─── Cria e fala um utterance ─────────────────────────────────────────────────
+function doSpeak(synth, text, onEnd) {
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "pt-BR"; u.rate = 0.88; u.pitch = 1; u.volume = 1;
+  const voice = pickVoice(); if (voice) u.voice = voice;
+  u.onend   = onEnd;
+  u.onerror = (e) => {
+    if (e.error === "interrupted" || e.error === "canceled") return;
+    // Retry com novo utterance
+    window.setTimeout(() => {
+      const r = new SpeechSynthesisUtterance(text);
+      r.lang = "pt-BR"; r.rate = 0.88; r.pitch = 1; r.volume = 1;
+      const v = pickVoice(); if (v) r.voice = v;
+      r.onend = onEnd;
+      synth.resume(); synth.speak(r);
+    }, 400);
+  };
+  synth.speak(u);
 }
 
 // ─── Sinal de alerta via AudioContext ─────────────────────────────────────────
@@ -120,22 +128,19 @@ function playAlertBeep() {
       resolve(); return;
     }
     try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      const ctx      = new AudioCtx();
-      const beeps    = [
-        { freq: 880,  start: 0,    duration: 0.18 },
-        { freq: 1100, start: 0.24, duration: 0.18 },
+      const ctx   = new (window.AudioContext || window.webkitAudioContext)();
+      const beeps = [
+        { freq: 880,  start: 0,    dur: 0.18 },
+        { freq: 1100, start: 0.24, dur: 0.18 },
       ];
       let lastEnd = 0;
-      for (const beep of beeps) {
+      for (const b of beeps) {
         const osc  = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type            = "sine";
-        osc.frequency.value = beep.freq;
-        const t0 = ctx.currentTime + beep.start;
-        const t1 = t0 + beep.duration;
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = "sine"; osc.frequency.value = b.freq;
+        const t0 = ctx.currentTime + b.start;
+        const t1 = t0 + b.dur;
         gain.gain.setValueAtTime(0, t0);
         gain.gain.linearRampToValueAtTime(0.6, t0 + 0.02);
         gain.gain.setValueAtTime(0.6, t1 - 0.04);
@@ -148,93 +153,59 @@ function playAlertBeep() {
   });
 }
 
-// ─── Fala simples (sem alerta) ────────────────────────────────────────────────
+// ─── speakNow — mensagens simples ("Som ativado." etc.) ──────────────────────
+// Usa simpleGeneration — NÃO interfere com speakWithAlert.
 function speakNow(text) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
-  const generation = ++speakGeneration;
-  const synth      = window.speechSynthesis;
+  const gen   = ++simpleGeneration;
+  const synth = window.speechSynthesis;
 
-  window.clearTimeout(speakTimer);
-  stopResumeWatch();
-  synth.resume();
-  if (synth.speaking || synth.pending) synth.cancel();
+  window.clearTimeout(simpleTimer);
 
-  speakTimer = window.setTimeout(async () => {
-    if (generation !== speakGeneration) return;
+  simpleTimer = window.setTimeout(async () => {
+    if (gen !== simpleGeneration) return;
     await waitForVoices();
-    if (generation !== speakGeneration) return;
+    if (gen !== simpleGeneration) return;
 
+    // Não cancela a síntese de alertGeneration — apenas fala por cima se necessário
     synth.resume();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "pt-BR"; u.rate = 0.88; u.pitch = 1; u.volume = 1;
-    const voice = pickVoice(); if (voice) u.voice = voice;
-
-    u.onend  = () => { if (generation === speakGeneration) stopResumeWatch(); };
-    u.onerror = (e) => {
-      if (e.error === "interrupted" || e.error === "canceled") return;
-      if (generation !== speakGeneration) return;
-      window.setTimeout(() => {
-        if (generation !== speakGeneration) return;
-        const r = new SpeechSynthesisUtterance(text);
-        r.lang = "pt-BR"; r.rate = 0.88; r.pitch = 1; r.volume = 1;
-        const v = pickVoice(); if (v) r.voice = v;
-        r.onend = () => { if (generation === speakGeneration) stopResumeWatch(); };
-        synth.resume(); synth.speak(r); startResumeWatch();
-      }, 300);
-    };
-
-    synth.speak(u);
-    startResumeWatch();
-  }, 300);
+    doSpeak(synth, text, () => {/* nada */});
+  }, 100);
 }
 
-// ─── Fala com alerta (beep → pausa → número) ──────────────────────────────────
+// ─── speakWithAlert — chamadas de senha (beep → pausa → fala) ────────────────
+// Usa alertGeneration — NÃO interfere com speakNow.
 async function speakWithAlert(text, key = "", force = false) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
-  // Deduplicação: descarta chamadas duplicadas dentro da janela
   if (!force && key && key === lastSpokenKey && Date.now() - lastSpokenAt < DEDUP_WINDOW_MS) return;
   if (key) { lastSpokenKey = key; lastSpokenAt = Date.now(); }
 
-  const generation = ++speakGeneration;
-  window.clearTimeout(speakTimer);
+  const gen   = ++alertGeneration;
+  const synth = window.speechSynthesis;
+
+  window.clearTimeout(alertTimer);
   stopResumeWatch();
 
-  const synth = window.speechSynthesis;
+  // Cancela qualquer fala anterior de senha (não cancela mensagens simples)
   synth.resume();
   if (synth.speaking || synth.pending) synth.cancel();
 
+  // 1. Beep de alerta
   await playAlertBeep();
-  if (generation !== speakGeneration) return;
+  if (gen !== alertGeneration) return;
 
+  // 2. Vozes carregadas?
   await waitForVoices();
-  if (generation !== speakGeneration) return;
+  if (gen !== alertGeneration) return;
 
-  await new Promise((r) => window.setTimeout(r, 300));
-  if (generation !== speakGeneration) return;
+  // 3. Pausa antes de falar
+  await new Promise((r) => window.setTimeout(r, 250));
+  if (gen !== alertGeneration) return;
 
   synth.resume();
-
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = "pt-BR"; u.rate = 0.88; u.pitch = 1; u.volume = 1;
-  const voice = pickVoice(); if (voice) u.voice = voice;
-
-  u.onend  = () => { if (generation === speakGeneration) stopResumeWatch(); };
-  u.onerror = (e) => {
-    if (e.error === "interrupted" || e.error === "canceled") return;
-    if (generation !== speakGeneration) return;
-    window.setTimeout(() => {
-      if (generation !== speakGeneration) return;
-      const r = new SpeechSynthesisUtterance(text);
-      r.lang = "pt-BR"; r.rate = 0.88; r.pitch = 1; r.volume = 1;
-      const v = pickVoice(); if (v) r.voice = v;
-      r.onend = () => { if (generation === speakGeneration) stopResumeWatch(); };
-      synth.resume(); synth.speak(r); startResumeWatch();
-    }, 300);
-  };
-
-  synth.speak(u);
+  doSpeak(synth, text, () => { if (gen === alertGeneration) stopResumeWatch(); });
   startResumeWatch();
 }
 
@@ -254,67 +225,34 @@ export function unlockSpeech() {
   window.speechSynthesis.speak(u);
 }
 
-// Registra esta aba como monitor speaker e dispara heartbeat periódico
 export function registerMonitorSpeaker() {
   isMonitorSpeaker = true;
   const ch = getChannel();
   const ping = () => ch?.postMessage({ type: "monitor-here" });
   ping();
   const timer = window.setInterval(ping, MONITOR_HEARTBEAT_MS);
-  return () => {
-    isMonitorSpeaker = false;
-    window.clearInterval(timer);
-  };
+  return () => { isMonitorSpeaker = false; window.clearInterval(timer); };
 }
 
-export function isMonitorSpeakerActive() {
-  return isMonitorSpeaker;
-}
+export function isMonitorSpeakerActive() { return isMonitorSpeaker; }
 
-// ─── monitorSpeak ──────────────────────────────────────────────────────────────
-// Chamado pelo monitor quando recebe um evento do Supabase Realtime.
-// Não verifica isMonitorSpeaker — quem decide se chama esta função é o próprio
-// monitor (via audioEnabledRef). Isso garante que funcione mesmo em produção
-// onde o BroadcastChannel não existe entre máquinas.
+// Chamado pelo monitor via Supabase Realtime — único ponto de fala de senhas
 export function monitorSpeak(number, type) {
   const text = buildSpeechText(number, type);
   const key  = `${Number(number)}-${type}`;
   speakWithAlert(text, key);
 }
 
-// ─── announceQueueCall ─────────────────────────────────────────────────────────
-// Chamado pelo dashboard após chamar uma senha.
-// Em produção (máquinas separadas): o monitor e o dashboard estão em máquinas
-// diferentes — BroadcastChannel NÃO funciona entre elas. O dashboard não pode
-// saber se há um monitor aberto em outro computador, então ele NUNCA fala.
-// A fala é responsabilidade exclusiva do monitor via Supabase Realtime.
-//
-// Exceção: se o monitor está na MESMA máquina (mesma aba ou aba irmã),
-// o heartbeat via BroadcastChannel chega e podemos silenciar o dashboard.
-// Nesse caso o monitor já vai falar via Realtime mesmo assim.
-//
-// Conclusão: o dashboard nunca precisa falar — sempre silencia.
-// Mantemos a função exportada para compatibilidade, mas ela é no-op.
-export function announceQueueCall(_number, _type) {
-  // No-op intencional.
-  // O monitor fala via monitorSpeak() ← Supabase Realtime.
-  // Se não houver monitor, o usuário precisa abrir a página /monitor.
-}
+// No-op — dashboard não fala; monitor fala via Realtime
+export function announceQueueCall(_number, _type) {}
 
-// ─── forceAnnounce ─────────────────────────────────────────────────────────────
-// Para "chamar novamente" no dashboard — força fala no monitor via Realtime
-// (o botão "Chamar Novamente" só deve ser usado com o monitor aberto).
-// Se o monitor está na mesma máquina, fala diretamente.
+// "Chamar novamente" — força repetição ignorando dedup
 export function forceAnnounce(number, type) {
-  // Só fala localmente se esta aba for o monitor
-  if (!isMonitorSpeaker) return;
   const text = buildSpeechText(number, type);
   const key  = `${Number(number)}-${type}`;
   if (lastSpokenKey === key) { lastSpokenKey = ""; lastSpokenAt = 0; }
   speakWithAlert(text, key, true);
 }
 
-// Fala simples sem alerta (mensagens de sistema: "Som ativado." etc.)
-export function speakText(text) {
-  speakNow(text);
-}
+// Fala simples sem beep (mensagens de sistema)
+export function speakText(text) { speakNow(text); }
