@@ -30,7 +30,7 @@ import {
   subscribeSession,
   withQueueLock,
 } from "../../lib/queue";
-import { isSupabaseConfigured, supabase } from "../../lib/supabase";
+import { isSupabaseConfigured, supabase, getRealtimeClient } from "../../lib/supabase";
 import { announceQueueCall, forceAnnounce, initSpeechClient, unlockSpeech } from "../../lib/speech";
 import styles from "./Dashboard.module.css";
 
@@ -96,9 +96,11 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase || !session?.sector) return;
+    if (!isSupabaseConfigured || !session?.sector) return;
+    const db = getRealtimeClient();
+    if (!db) return;
 
-    const channel = supabase
+    const channel = db
       .channel(`realtime-dashboard-${session.sector}`)
       .on(
         "postgres_changes",

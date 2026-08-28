@@ -8,7 +8,7 @@ import {
   SECTORS,
   subscribeQueue,
 } from "../../../lib/queue";
-import { isSupabaseConfigured, supabase } from "../../../lib/supabase";
+import { isSupabaseConfigured, getRealtimeClient } from "../../../lib/supabase";
 import {
   monitorSpeak,
   registerMonitorSpeaker,
@@ -174,11 +174,13 @@ export default function MonitorPage({ params }) {
   }, []);
 
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase || !sector) return;
+    if (!isSupabaseConfigured || !sector) return;
+    const db = getRealtimeClient();
+    if (!db) return;
 
     async function fetchInitialHistory() {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await db
           .from("queue_calls")
           .select("*")
           .eq("sector_id", sector)
@@ -218,7 +220,7 @@ export default function MonitorPage({ params }) {
 
     fetchInitialHistory();
 
-    const channel = supabase
+    const channel = db
       .channel(`realtime-monitor-${sector}`)
       .on(
         "postgres_changes",
@@ -232,7 +234,6 @@ export default function MonitorPage({ params }) {
           const call = payload.new;
           if (!call || !call.number_int) return;
 
-          // Impede re-execução da mesma chamada pelo ID
           const callKey = `${call.id || call.number_int}-${call.type}`;
           if (lastSpokenCallId === callKey) return;
           lastSpokenCallId = callKey;
@@ -284,7 +285,7 @@ export default function MonitorPage({ params }) {
       });
 
     return () => {
-      supabase.removeChannel(channel);
+      db.removeChannel(channel);
     };
   }, [sector]);
 
