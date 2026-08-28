@@ -11,11 +11,10 @@ import {
 } from "../../../lib/queue";
 import { isSupabaseConfigured, supabase } from "../../../lib/supabase";
 import {
-  announceQueueCall,
+  monitorSpeak,
   registerMonitorSpeaker,
   speakText,
   unlockSpeech,
-  isMonitorSpeakerActive,
 } from "../../../lib/speech";
 import styles from "./Monitor.module.css";
 
@@ -267,12 +266,10 @@ export default function MonitorPage({ params }) {
             },
           });
 
-          // O BroadcastChannel já entrega a fala para o monitor quando ele
-          // está registrado como speaker. Chamar announceQueueCall aqui também
-          // causaria dupla fala. Só anunciamos via Realtime se o monitor
-          // ainda NÃO está registrado como speaker (ex: aba recém aberta).
-          if (audioEnabledRef.current && !isMonitorSpeakerActive()) {
-            announceQueueCall(call.number_int, callTypeFormatted);
+          // monitorSpeak é o único ponto de fala do monitor.
+          // Só fala se o áudio estiver habilitado e esta aba for o speaker registrado.
+          if (audioEnabledRef.current) {
+            monitorSpeak(call.number_int, callTypeFormatted);
           }
         }
       )
