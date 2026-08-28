@@ -1,7 +1,6 @@
 "use client";
 
 import { use, useEffect, useRef, useState, useSyncExternalStore, memo } from "react";
-import Image from "next/image";
 import { Clock3, Volume2 } from "lucide-react";
 import {
   getQueueSnapshot,
@@ -86,11 +85,9 @@ const NewsCarousel = memo(function NewsCarousel() {
 
   useEffect(() => {
     if (!news || news.length === 0) return;
-
     const newsTimer = setInterval(() => {
-      setNewsIndex((prevIndex) => (prevIndex + 1) % news.length);
+      setNewsIndex((prev) => (prev + 1) % news.length);
     }, 5000);
-
     return () => clearInterval(newsTimer);
   }, [news]);
 
@@ -102,15 +99,22 @@ const NewsCarousel = memo(function NewsCarousel() {
     );
   }
 
+  const current = news[newsIndex];
+
   return (
     <>
-      {news[newsIndex]?.image && (
-        <Image
-          src={news[newsIndex].image}
-          alt=""
-          fill
-          unoptimized
-          sizes="(max-width: 900px) 100vw, 60vw"
+      {current?.image && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={current.image}
+          alt={current.title || ""}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+          }}
         />
       )}
       <div className={styles.newsCaption}>
@@ -139,6 +143,7 @@ export default function MonitorPage({ params }) {
 
   const [time, setTime] = useState("");
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [lastEvent, setLastEvent] = useState(null); // diagnóstico
   const audioEnabledRef = useRef(false);
   audioEnabledRef.current = audioEnabled;
 
@@ -268,6 +273,7 @@ export default function MonitorPage({ params }) {
 
           // monitorSpeak é o único ponto de fala do sistema.
           // audioEnabledRef garante que só fala após o usuário clicar "Ativar Áudio".
+          setLastEvent(`#${call.number_int} ${callTypeFormatted} | áudio=${audioEnabledRef.current} | ${new Date().toLocaleTimeString("pt-BR")}`);
           if (audioEnabledRef.current) {
             monitorSpeak(call.number_int, callTypeFormatted);
           }
@@ -318,6 +324,23 @@ export default function MonitorPage({ params }) {
           <Volume2 size={20} /> Clique para Ativar Áudio das Chamadas
         </button>
       )}
+
+      {/* Diagnóstico — remover após confirmar funcionamento */}
+      <div style={{
+        position: "fixed",
+        bottom: 8,
+        left: 8,
+        zIndex: 9999,
+        background: "rgba(0,0,0,0.65)",
+        color: "#7fffcc",
+        fontSize: "11px",
+        padding: "4px 10px",
+        borderRadius: "4px",
+        fontFamily: "monospace",
+        pointerEvents: "none",
+      }}>
+        áudio: {audioEnabled ? "✅ ON" : "❌ OFF"} | realtime: {lastEvent || "aguardando..."}
+      </div>
 
       <header className={styles.header}>
         <div className={styles.sectorTitle}>{info.name.toUpperCase()}</div>
