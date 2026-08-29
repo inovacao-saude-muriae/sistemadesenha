@@ -334,3 +334,215 @@
   font-size: 13px;
   margin-bottom: 6px;
 }
+
+/* ── Histórico por setor ─────────────────────────────── */
+
+.historyBlock {
+  margin-top: 28px;
+}
+
+.historyBlock + .historyBlock {
+  border-top: 2px solid #e8f0f4;
+  padding-top: 24px;
+}
+
+.historyBlockTitle {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0d4d6e;
+  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.historyBlockTitle::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 18px;
+  background: #1678a0;
+  border-radius: 2px;
+}
+
+.historyEmpty {
+  font-size: 13px;
+  color: #9ab0bc;
+  padding: 10px 0;
+}
+
+.historyHead {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr 1.4fr;
+  padding: 6px 8px;
+  background: #f0f6f9;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #7a9aad;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.historyRow {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr 1.4fr;
+  align-items: center;
+  padding: 10px 8px;
+  border-bottom: 1px solid #edf2f5;
+  font-size: 12px;
+  color: #5a7a8a;
+}
+
+.historyRow strong {
+  font-size: 17px;
+  font-weight: 800;
+  color: #163b52;
+  letter-spacing: 1px;
+}
+
+.historyRow time {
+  font-size: 11px;
+  color: #8aa0ab;
+}
+
+.tagNormal {
+  display: inline-block;
+  background: #e6f4f9;
+  color: #1678a0;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+.tagPriority {
+  display: inline-block;
+  background: #fff3e0;
+  color: #b85c00;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+@media (max-width: 500px) {
+  .historyHead,
+  .historyRow {
+    grid-template-columns: 0.8fr 1.2fr 1fr;
+  }
+}
+
+/* ── Filtros do histórico ───────────────────────────── */
+
+.historyFilters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 16px 18px;
+  background: #f4f8fb;
+  border: 1px solid #dce9ed;
+  border-radius: 10px;
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 120px;
+}
+
+.filterGroup label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #7a9aad;
+  text-transform: uppercase;
+}
+
+.filterGroup select,
+.filterGroup input[type="date"] {
+  border: 1px solid #cddde5;
+  border-radius: 6px;
+  padding: 9px 10px;
+  font-size: 13px;
+  color: #1a3d55;
+  background: #fff;
+  outline-color: #1678a0;
+}
+
+.filterBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #1678a0;
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  padding: 10px 18px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  align-self: flex-end;
+  transition: background 0.15s;
+}
+
+.filterBtn:hover {
+  background: #1389b8;
+}
+
+.loadingMsg {
+  margin-top: 20px;
+  font-size: 13px;
+  color: #7a9aad;
+}
+
+/* ── Cards de totais redesenhados ───────────────────── */
+
+.statCard {
+  border: 1px solid #dde9ed;
+  border-radius: 10px;
+  padding: 18px 20px;
+  background: #fff;
+}
+
+.statCard strong {
+  display: block;
+  font-size: 32px;
+  font-weight: 900;
+  color: #0d5e7e;
+  line-height: 1;
+}
+
+.statCard span {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #7a9aad;
+  text-transform: uppercase;
+}
+
+.statCardNormal strong  { color: #1678a0; }
+.statCardPref   strong  { color: #b85c00; }
+
+@media (max-width: 600px) {
+  .historyFilters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .filterGroup {
+    min-width: unset;
+    width: 100%;
+  }
+  .filterBtn {
+    width: 100%;
+    justify-content: center;
+  }
+}

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
+  Filter,
   ImagePlus,
   LogOut,
   Monitor,
@@ -56,10 +57,17 @@ export default function AdminPage() {
   const [image, setImage]               = useState("");
   const [message, setMessage]           = useState("");
   const [stats, setStats]               = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
   const [draftNews, setDraftNews]       = useState([]);
   const [savingNews, setSavingNews]     = useState(false);
   const [resettingSector, setResettingSector] = useState({});
   const [, refreshNews]                 = useState(0);
+
+  // filtros de histórico
+  const [filterSector, setFilterSector] = useState("");
+  const [filterFrom,   setFilterFrom]   = useState("");
+  const [filterTo,     setFilterTo]     = useState("");
+  const [filterDays,   setFilterDays]   = useState("30");
 
   /* segurança: só admin */
   useEffect(() => {
@@ -81,13 +89,27 @@ export default function AdminPage() {
       .catch(() => {});
   }, []);
 
-  /* estatísticas */
-  useEffect(() => {
-    fetch("/api/stats?days=30")
+  /* busca de estatísticas com filtros */
+  const fetchStats = useCallback((overrides = {}) => {
+    const days   = overrides.days   !== undefined ? overrides.days   : filterDays;
+    const sector = overrides.sector !== undefined ? overrides.sector : filterSector;
+    const from   = overrides.from   !== undefined ? overrides.from   : filterFrom;
+    const to     = overrides.to     !== undefined ? overrides.to     : filterTo;
+
+    const params = new URLSearchParams({ days });
+    if (sector) params.set("sector", sector);
+    if (from)   params.set("from", from);
+    if (to)     params.set("to", to);
+
+    setStatsLoading(true);
+    fetch(`/api/stats?${params}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then(setStats)
-      .catch(() => {});
-  }, []);
+      .then((data) => { setStats(data); setStatsLoading(false); })
+      .catch(() => setStatsLoading(false));
+  }, [filterDays, filterSector, filterFrom, filterTo]);
+
+  /* estatísticas — carrega ao montar */
+  useEffect(() => { fetchStats(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!session) return null;
 
@@ -336,55 +358,146 @@ export default function AdminPage() {
               <p>GESTÃO</p>
               <h2>Histórico de atendimentos</h2>
             </div>
-            <select
-              defaultValue="30"
-              onChange={(e) =>
-                fetch(`/api/stats?days=${e.target.value}`)
-                  .then((r) => (r.ok ? r.json() : null))
-                  .then(setStats)
-              }
-            >
-              <option value="7">Últimos 7 dias</option>
-              <option value="30">Últimos 30 dias</option>
-              <option value="90">Últimos 90 dias</option>
-            </select>
           </div>
 
-          {stats ? (
+          {/* filtros */}
+          <div className={styles.historyFilters}>
+            <div className={styles.filterGroup}>
+              <label>Período</label>
+              <select
+                value={filterDays}
+                onChange={(e) => {
+                  setFilterDays(e.target.value);
+                  setFilterFrom("");
+                  setFilterTo("");
+                  fetchStats({ days: e.target.value, from: "", to: "" });
+                }}
+              >
+                <option value="1">Hoje</option>
+                <option value="7">Últimos 7 dias</option>
+                <option value="30">Últimos 30 dias</option>
+                <option value="90">Últimos 90 dias</option>
+              </select>
+            </div>
+
+            <div className={styles.filterGroup}>
+              <label>Setor</label>
+              <select
+                value={filterSector}
+                onChange={(e) => {
+                  setFilterSector(e.target.value);
+                  fetchStats({ sector: e.target.value });
+                }}
+              >
+                <option value="">Todos os setores</option>
+                {Object.values(SECTORS).map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className={styles.filterGroup}>
+              <label>De</label>
+              <input
+                type="date"
+                value={filterFrom}
+                onChange={(e) => setFilterFrom(e.target.value)}
+              />
+            </div>
+
+            <div className={styles.filterGroup}>
+              <label>Até</label>
+              <input
+                type="date"
+                value={filterTo}
+                onChange={(e) => setFilterTo(e.target.value)}
+              />
+            </div>
+
+            <button
+              className={styles.filterBtn}
+              type="button"
+              onClick={() => fetchStats()}
+            >
+              <Filter size={14} /> Filtrar
+            </button>
+          </div>
+
+          {statsLoading && <p className={styles.loadingMsg}>Carregando…</p>}
+
+          {stats && !statsLoading && (
             <>
+              {/* cards de totais */}
               <div className={styles.statsGrid}>
-                <article>
-                  <strong>{stats.summary?.total || 0}</strong>
+                <article className={styles.statCard}>
+                  <strong>{stats.summary?.total ?? 0}</strong>
                   <span>Total no período</span>
                 </article>
-                <article>
-                  <strong>{stats.summary?.today || 0}</strong>
+                <article className={styles.statCard}>
+                  <strong>{stats.summary?.today ?? 0}</strong>
                   <span>Atendimentos hoje</span>
                 </article>
-                {stats.bySector?.map((item) => (
-                  <article key={item.sector}>
-                    <strong>{item.total}</strong>
-                    <span>{SECTORS[item.sector]?.name || item.sector}</span>
-                  </article>
-                ))}
+                <article className={`${styles.statCard} ${styles.statCardNormal}`}>
+                  <strong>{stats.summary?.normal ?? 0}</strong>
+                  <span>Senhas normais</span>
+                </article>
+                <article className={`${styles.statCard} ${styles.statCardPref}`}>
+                  <strong>{stats.summary?.preferencial ?? 0}</strong>
+                  <span>Preferenciais</span>
+                </article>
               </div>
 
-              <div className={styles.historyList}>
-                {stats.recent?.map((item, i) => (
-                  <div key={`${item.created_at}-${i}`}>
-                    <strong>{item.number_str}</strong>
-                    <span>{SECTORS[item.sector_id || item.sector]?.name || item.sector_id || item.sector}</span>
-                    <span>{["preferencial", "preferential"].includes(item.type) ? "Preferencial" : "Normal"}</span>
-                    <time>
-                      {new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" })
-                        .format(new Date(item.created_at))}
-                    </time>
-                  </div>
-                ))}
-              </div>
+              {/* tabelas por setor */}
+              {stats.noDb ? (
+                <p className={styles.historyEmpty} style={{ marginTop: 24 }}>
+                  Banco de dados não configurado. Os dados aparecerão aqui após a conexão com o Supabase.
+                </p>
+              ) : (
+                Object.values(SECTORS)
+                  .filter((sec) => !filterSector || filterSector === sec.id)
+                  .map((sec) => {
+                    const rows = stats.recentBySector?.[sec.id] || [];
+                    return (
+                      <div key={sec.id} className={styles.historyBlock}>
+                        <h3 className={styles.historyBlockTitle}>{sec.name}</h3>
+                        {rows.length === 0 ? (
+                          <p className={styles.historyEmpty}>Nenhuma chamada no período.</p>
+                        ) : (
+                          <>
+                            <div className={styles.historyHead}>
+                              <span>Senha</span>
+                              <span>Tipo</span>
+                              <span>Data / Hora</span>
+                            </div>
+                            <div className={styles.historyList}>
+                              {rows.map((item, i) => (
+                                <div key={`${item.created_at}-${i}`} className={styles.historyRow}>
+                                  <strong>{item.number_str}</strong>
+                                  <span className={
+                                    ["preferencial", "preferential"].includes(item.type)
+                                      ? styles.tagPriority
+                                      : styles.tagNormal
+                                  }>
+                                    {["preferencial", "preferential"].includes(item.type)
+                                      ? "Preferencial"
+                                      : "Normal"}
+                                  </span>
+                                  <time>
+                                    {new Intl.DateTimeFormat("pt-BR", {
+                                      dateStyle: "short",
+                                      timeStyle: "short",
+                                    }).format(new Date(item.created_at))}
+                                  </time>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })
+              )}
             </>
-          ) : (
-            <p>Carregando histórico…</p>
           )}
         </section>
       </section>
