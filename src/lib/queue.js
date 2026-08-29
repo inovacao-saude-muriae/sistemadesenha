@@ -34,31 +34,7 @@ let clientQueueRaw = null;
 let clientSessionSnapshot = null;
 let clientSessionRaw = null;
 
-export const ATTENDANT_ACCOUNTS = {
-  admin: {
-    id: "local-admin",
-    name: "Administradora",
-    initials: "AD",
-    role: "admin",
-    password: "admin123",
-  },
-  "recepcao.atendimento": {
-    id: "local-recepcao",
-    name: "Atendimento Recepção",
-    initials: "RC",
-    sector: "recepcao",
-    accessLevel: 1,
-    password: "recepcao123",
-  },
-  "farmacia.atendimento": {
-    id: "local-farmacia",
-    name: "Atendimento Farmácia",
-    initials: "FM",
-    sector: "farmacia",
-    accessLevel: 1,
-    password: "farmacia123",
-  },
-};
+// Usuários movidos para o banco de dados (tabela profiles + auth.users)
 
 function localDateKey() {
   const now = new Date();

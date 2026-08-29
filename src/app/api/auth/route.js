@@ -22,18 +22,24 @@ export async function POST(request) {
 
   try {
     const { login, password } = await request.json();
-    const normalizedLogin = String(login || "")
-      .trim()
-      .toLowerCase();
+    const email = String(login || "").trim().toLowerCase();
+    
+    // Se não contém @, adiciona domínio padrão (compatibilidade)
+    const loginEmail = email.includes("@") 
+      ? email 
+      : `${email}@central-atendimento.local`;
+
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: `${normalizedLogin}@central-atendimento.local`,
+      email: loginEmail,
       password,
     });
-    if (error || !data.user)
+    
+    if (error || !data.user) {
       return Response.json(
         { error: "Login ou senha inválidos." },
         { status: 401 },
       );
+    }
 
     const profileClient =
       isSupabaseAdminConfigured && supabaseAdmin ? supabaseAdmin : supabase;

@@ -546,3 +546,228 @@
     justify-content: center;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   SEÇÃO DE USUÁRIOS
+═══════════════════════════════════════════════════════════ */
+
+.userInfo {
+  background: #f9fcfe;
+  border: 1px solid #dde9ed;
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 24px;
+}
+
+.userInfo p {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #0d2d47;
+}
+
+.userInfo ul {
+  margin: 8px 0;
+  padding-left: 20px;
+  font-size: 13px;
+  color: #416477;
+}
+
+.userInfo li {
+  margin: 4px 0;
+}
+
+.userInfo code {
+  background: #e6eff5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #1678a0;
+}
+
+.userInfo small {
+  display: block;
+  margin-top: 12px;
+  font-size: 11px;
+  color: #7a9aad;
+}
+
+.addUserBtn {
+  background: #1678a0;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.addUserBtn:hover {
+  background: #1389b8;
+}
+
+.userForm {
+  background: #f9fcfe;
+  border: 1px solid #dde9ed;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.userForm label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #416477;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.userForm input,
+.userForm select {
+  width: 100%;
+  border: 1.5px solid #cddde5;
+  border-radius: 8px;
+  padding: 11px 13px;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+  background: #fff;
+  transition: border-color 0.15s;
+}
+
+.userForm input:focus,
+.userForm select:focus {
+  border-color: #1678a0;
+}
+
+.userForm button[type="submit"] {
+  background: #1678a0;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-top: 8px;
+}
+
+.userForm button[type="submit"]:hover:not(:disabled) {
+  background: #1389b8;
+}
+
+.userForm button[type="submit"]:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.usersTable {
+  margin-top: 24px;
+}
+
+.usersTable h3 {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0d2d47;
+  margin: 0 0 16px;
+}
+
+.usersTable table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid #dde9ed;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.usersTable thead {
+  background: #f4f8fb;
+}
+
+.usersTable th {
+  text-align: left;
+  padding: 14px 16px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #416477;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border-bottom: 1px solid #dde9ed;
+}
+
+.usersTable td {
+  padding: 14px 16px;
+  font-size: 13px;
+  color: #0d2d47;
+  border-bottom: 1px solid #f0f5f8;
+}
+
+.usersTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.badgeAdmin,
+.badgeAttendant {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.badgeAdmin {
+  background: #fef3e6;
+  color: #c97a0e;
+}
+
+.badgeAttendant {
+  background: #e6f4fb;
+  color: #1678a0;
+}
+
+.deleteUserBtn {
+  background: #fdecea;
+  color: #b33a2e;
+  border: 1px solid #f5c6c2;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s;
+}
+
+.deleteUserBtn:hover:not(:disabled) {
+  background: #fcded9;
+}
+
+.deleteUserBtn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.emptyMsg {
+  font-size: 13px;
+  color: #7a9aad;
+  text-align: center;
+  padding: 24px;
+}

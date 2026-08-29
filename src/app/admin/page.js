@@ -14,6 +14,7 @@ import {
   Save,
   ShieldCheck,
   Trash2,
+  UserPlus,
 } from "lucide-react";
 import {
   getQueueSnapshot,
@@ -235,7 +236,10 @@ export default function AdminPage() {
     <main className={styles.page}>
       <header>
         <div><ShieldCheck size={19} /> PAINEL ADMINISTRATIVO</div>
-        <Link href="/login" onClick={() => window.localStorage.removeItem(SESSION_KEY)}>
+        <Link href="/login" onClick={() => {
+          window.localStorage.removeItem(SESSION_KEY);
+          document.cookie = "session=; path=/; max-age=0";
+        }}>
           <LogOut size={16} /> Sair
         </Link>
       </header>
@@ -451,7 +455,233 @@ export default function AdminPage() {
             </div>
           )}
         </section>
+
+        {/* ── Gerenciamento de usuários ── */}
+        <UsersSection />
+
       </section>
     </main>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SEÇÃO DE USUÁRIOS
+═══════════════════════════════════════════════════════════ */
+function UsersSection() {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  // form
+  const [email, setEmail]         = useState("");
+  const [password, setPassword]   = useState("");
+  const [fullName, setFullName]   = useState("");
+  const [role, setRole]           = useState("attendant");
+  const [sectorId, setSectorId]   = useState("");
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  async function loadUsers() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/users");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setUsers(data.users || []);
+    } catch (err) {
+      setMessage(err.message || "Erro ao carregar usuários");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCreate(e) {
+    e.preventDefault();
+    setMessage("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          full_name: fullName,
+          role,
+          sector_id: sectorId || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setMessage(`Usuário ${fullName} criado com sucesso!`);
+      setEmail("");
+      setPassword("");
+      setFullName("");
+      setRole("attendant");
+      setSectorId("");
+      setShowForm(false);
+      await loadUsers();
+    } catch (err) {
+      setMessage(err.message || "Erro ao criar usuário");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete(userId, userName) {
+    if (!window.confirm(`Excluir o usuário "${userName}"?\n\nEsta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const res = await fetch(`/api/users?id=${userId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setMessage(`Usuário ${userName} excluído com sucesso.`);
+      await loadUsers();
+    } catch (err) {
+      setMessage(err.message || "Erro ao excluir usuário");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <section className={styles.section}>
+      <div className={styles.sectionTitle}>
+        <div>
+          <p>ACESSO</p>
+          <h2>Gerenciamento de usuários</h2>
+        </div>
+        <button
+          type="button"
+          className={styles.addUserBtn}
+          onClick={() => setShowForm(!showForm)}
+        >
+          {showForm ? "Cancelar" : "+ Novo usuário"}
+        </button>
+      </div>
+
+      {message && <div className={styles.alertBox}>{message}</div>}
+
+      {/* Formulário de criação */}
+      {showForm && (
+        <form className={styles.userForm} onSubmit={handleCreate}>
+          <div className={styles.formRow}>
+            <label>
+              Email
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="usuario@exemplo.com"
+                required
+              />
+            </label>
+
+            <label>
+              Senha
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+              />
+            </label>
+          </div>
+
+          <div className={styles.formRow}>
+            <label>
+              Nome completo
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Nome Sobrenome"
+                required
+              />
+            </label>
+
+            <label>
+              Função
+              <select value={role} onChange={(e) => setRole(e.target.value)}>
+                <option value="attendant">Atendente</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </label>
+
+            <label>
+              Setor (opcional)
+              <select value={sectorId} onChange={(e) => setSectorId(e.target.value)}>
+                <option value="">Nenhum</option>
+                {Object.values(SECTORS).map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <button type="submit" disabled={loading}>
+            {loading ? "Criando…" : "Criar usuário"}
+          </button>
+        </form>
+      )}
+
+      {/* Lista de usuários Supabase */}
+      <div className={styles.usersTable}>
+        <h3>Usuários cadastrados</h3>
+        {loading && <p className={styles.loadingMsg}>Carregando…</p>}
+        {!loading && users.length === 0 && (
+          <p className={styles.emptyMsg}>
+            Nenhum usuário cadastrado. Clique em "+ Novo usuário" para criar o primeiro administrador.
+          </p>
+        )}
+        {!loading && users.length > 0 && (
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Função</th>
+                <th>Setor</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id}>
+                  <td>{u.full_name}</td>
+                  <td>
+                    <span className={u.role === "admin" ? styles.badgeAdmin : styles.badgeAttendant}>
+                      {u.role === "admin" ? "Administrador" : "Atendente"}
+                    </span>
+                  </td>
+                  <td>{u.sector_id ? SECTORS[u.sector_id]?.name || u.sector_id : "—"}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className={styles.deleteUserBtn}
+                      onClick={() => handleDelete(u.id, u.full_name)}
+                      disabled={loading}
+                    >
+                      <Trash2 size={13} /> Excluir
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
   );
 }

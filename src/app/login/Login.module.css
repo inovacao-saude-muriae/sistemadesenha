@@ -1,218 +1,234 @@
-/* ═══════════════════════════════════════
-   PÁGINA DE LOGIN / ENTRADA
-═══════════════════════════════════════ */
+/* ═══════════════════════════════════════════════
+   LOGIN — split layout (hero | formulário)
+═══════════════════════════════════════════════ */
 
 .page {
   min-height: 100vh;
   min-height: 100dvh;
-  background: linear-gradient(145deg, #0b3555 0%, #0e4d73 55%, #134f70 100%);
+  display: flex;
+}
+
+/* ── Hero ── */
+.hero {
+  flex: 1;
+  background: linear-gradient(160deg, #061e32 0%, #0b3555 45%, #0e5070 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 48px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before,
+.hero::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.07;
+  background: #fff;
+}
+.hero::before { width: 480px; height: 480px; top: -120px; right: -100px; }
+.hero::after  { width: 300px; height: 300px; bottom: -80px; left: -60px; }
+
+.heroContent {
+  position: relative;
+  z-index: 1;
+  color: #fff;
+  max-width: 380px;
+}
+
+.heroMark {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: #1678a0;
   display: grid;
   place-items: center;
-  padding: 20px;
+  font-size: 34px;
+  font-weight: 900;
+  color: #fff;
+  margin-bottom: 32px;
+  box-shadow: 0 8px 28px rgba(22, 120, 160, 0.45);
+}
+
+.heroContent h1 {
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 900;
+  line-height: 1.15;
+  margin: 0 0 16px;
+  color: #fff;
+}
+
+.heroContent p {
+  font-size: 15px;
+  color: #8eb8cc;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.heroDots {
+  display: flex;
+  gap: 8px;
+  margin-top: 40px;
+}
+.heroDots span {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #1678a0;
+}
+.heroDots span:nth-child(2) { opacity: 0.6; }
+.heroDots span:nth-child(3) { opacity: 0.3; }
+
+/* ── Lado direito ── */
+.side {
+  width: min(480px, 100%);
+  background: #f4f8fb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 32px;
   box-sizing: border-box;
 }
 
 .panel {
-  width: min(460px, 100%);
-  background: #fff;
-  border-radius: 20px;
-  padding: 36px 36px 32px;
-  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.35);
-  box-sizing: border-box;
+  width: 100%;
+  max-width: 360px;
 }
 
-/* ── Marca / logo ── */
-.brand {
-  display: flex;
+/* brand mobile */
+.mobileBrand {
+  display: none;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   margin-bottom: 32px;
 }
-
 .brandMark {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
+  width: 44px; height: 44px;
+  border-radius: 12px;
   background: #1678a0;
   color: #fff;
   display: grid;
   place-items: center;
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 900;
   flex-shrink: 0;
 }
+.mobileBrand strong { display: block; font-size: 15px; font-weight: 800; color: #fff; }
+.mobileBrand span   { font-size: 11px; color: rgba(255,255,255,0.5); }
 
-.brand strong {
-  display: block;
-  font-size: 17px;
-  font-weight: 800;
+/* título */
+.panelTitle {
+  font-size: 24px;
+  font-weight: 900;
   color: #0d2d47;
-  line-height: 1.2;
+  margin: 0 0 6px;
 }
-
-.brand span {
-  font-size: 12px;
+.panelSub {
+  font-size: 13px;
   color: #7a9aad;
+  margin: 0 0 28px;
 }
 
-/* ── Seção monitor ── */
-.monitorSection {
-  margin-bottom: 4px;
-}
-
-.monitorLabel {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 1.8px;
-  color: #7a9aad;
-  margin: 0 0 12px;
-}
-
-.monitorButtons {
+/* formulário */
+.form {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 16px;
 }
 
-.monitorBtn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: #1678a0;
-  color: #fff;
-  text-decoration: none;
-  border-radius: 12px;
-  padding: 20px 12px;
-  font-size: 14px;
-  font-weight: 800;
-  text-align: center;
-  transition: background 0.18s, transform 0.15s, box-shadow 0.18s;
-  box-shadow: 0 6px 20px rgba(22, 120, 160, 0.3);
-  line-height: 1.3;
-}
-
-.monitorBtn:hover {
-  background: #1389b8;
-  transform: translateY(-2px);
-  box-shadow: 0 10px 28px rgba(22, 120, 160, 0.42);
-}
-
-.monitorBtn:active {
-  transform: scale(0.97);
-}
-
-.monitorHint {
-  margin: 10px 0 0;
-  font-size: 11px;
-  color: #8aa4b2;
-  text-align: center;
-  line-height: 1.5;
-}
-
-/* ── Divisor ── */
-.divider {
-  height: 1px;
-  background: #e4edf2;
-  margin: 24px 0 18px;
-}
-
-/* ── Toggle admin ── */
-.adminToggle {
-  width: 100%;
-  background: none;
-  border: 1px solid #d8e7ed;
-  border-radius: 8px;
-  color: #4d7a8c;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 11px 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: background 0.15s, color 0.15s;
-}
-
-.adminToggle:hover {
-  background: #f0f8fc;
-  color: #1678a0;
-  border-color: #b5d4e0;
-}
-
-.adminToggle svg:last-child {
-  margin-left: auto;
-}
-
-/* ── Formulário admin ── */
-.adminForm {
-  margin-top: 16px;
-  display: grid;
-  gap: 14px;
-}
-
-.adminForm label {
+.form label {
   font-size: 11px;
   font-weight: 700;
   color: #416477;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
 
-.adminForm input {
+.form input {
   display: block;
   width: 100%;
-  border: 1px solid #d2e1e7;
-  border-radius: 7px;
-  padding: 12px 13px;
-  margin-top: 6px;
-  font: inherit;
-  font-size: 13px;
-  outline-color: #1678a0;
-  box-sizing: border-box;
-  transition: border-color 0.15s;
-}
-
-.adminForm input:focus {
-  border-color: #1678a0;
-}
-
-.adminForm button {
-  border: none;
+  border: 1.5px solid #cddde5;
   border-radius: 8px;
-  background: #0b3555;
+  padding: 13px 14px;
+  margin-top: 7px;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+  background: #fff;
+  color: #0d2d47;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.form input:focus {
+  border-color: #1678a0;
+  box-shadow: 0 0 0 3px rgba(22, 120, 160, 0.12);
+}
+
+.form button {
+  margin-top: 4px;
+  border: none;
+  border-radius: 9px;
+  background: #1678a0;
   color: #fff;
-  padding: 13px;
+  padding: 15px;
   font-weight: 800;
-  font-size: 13px;
+  font-size: 14px;
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+  box-shadow: 0 4px 16px rgba(22, 120, 160, 0.3);
 }
 
-.adminForm button:hover:not(:disabled) {
-  background: #134f70;
+.form button:hover:not(:disabled) {
+  background: #1389b8;
+  box-shadow: 0 6px 22px rgba(22, 120, 160, 0.4);
 }
 
-.adminForm button:disabled {
-  opacity: 0.6;
-  cursor: wait;
-}
+.form button:active:not(:disabled) { transform: scale(0.98); }
+.form button:disabled { opacity: 0.6; cursor: wait; }
 
-.error {
-  color: #bc5b4c;
-  font-size: 11px;
+/* erro */
+.errorBox {
+  background: #fdecea;
+  border: 1px solid #f5c6c2;
+  border-radius: 7px;
+  color: #b33a2e;
+  font-size: 12px;
   font-weight: 600;
+  padding: 11px 14px;
 }
 
-@media (max-width: 400px) {
-  .panel {
-    padding: 28px 22px 24px;
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  .page { flex-direction: column; }
+  .hero { display: none; }
+
+  .side {
+    width: 100%;
+    min-height: 100vh;
+    padding: 40px 24px;
+    background: linear-gradient(160deg, #061e32 0%, #0b3555 100%);
   }
 
-  .monitorButtons {
-    grid-template-columns: 1fr;
+  .mobileBrand { display: flex; }
+
+  .panelTitle { color: #fff; }
+  .panelSub   { color: #8eb8cc; }
+
+  .form label { color: #8eb8cc; }
+
+  .form input {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.18);
+    color: #fff;
+  }
+  .form input::placeholder { color: rgba(255,255,255,0.3); }
+  .form input:focus {
+    background: rgba(255,255,255,0.12);
+    border-color: #1678a0;
   }
 }
