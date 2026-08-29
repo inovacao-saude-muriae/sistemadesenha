@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -168,12 +168,15 @@ export default function AdminPage() {
   }
 
   /* ── notícias ── */
+  const pendingFileRef = useRef(null);
+
   function addNews(event) {
     event.preventDefault();
-    if (!title || !image) return;
-    setDraftNews([{ id: `draft-${Date.now()}`, title, image }, ...draftNews]);
+    if (!title || !pendingFileRef.current) return;
+    setDraftNews([{ id: `draft-${Date.now()}`, title, image, _file: pendingFileRef.current }, ...draftNews]);
     setTitle("");
     setImage("");
+    pendingFileRef.current = null;
     setMessage("Alteração pendente. Clique em 'Salvar notícias' para publicar.");
   }
 
@@ -181,23 +184,26 @@ export default function AdminPage() {
     setSavingNews(true);
     setMessage("");
     try {
+      // Remove os que foram deletados do rascunho
       const removed = news.filter(
         (item) => !draftNews.some((d) => String(d.id) === String(item.id))
       );
       for (const item of removed) {
         await fetch(`/api/news?id=${item.id}`, { method: "DELETE" });
       }
+
+      // Cria os novos (que têm id começando com "draft-")
       const created = [];
       for (const item of draftNews.filter((d) => String(d.id).startsWith("draft-"))) {
-        const res  = await fetch("/api/news", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: item.title, image: item.image }),
-        });
+        const fd = new FormData();
+        fd.append("title", item.title);
+        fd.append("image", item._file);
+        const res  = await fetch("/api/news", { method: "POST", body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         created.push(data.news);
       }
+
       const res  = await fetch("/api/news");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -221,9 +227,9 @@ export default function AdminPage() {
   function readImage(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setImage(String(reader.result));
-    reader.readAsDataURL(file);
+    pendingFileRef.current = file;
+    // preview local via URL temporária
+    setImage(URL.createObjectURL(file));
   }
 
   return (
