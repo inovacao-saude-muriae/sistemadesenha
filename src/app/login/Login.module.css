@@ -1,76 +1,218 @@
+/* ═══════════════════════════════════════
+   PÁGINA DE LOGIN / ENTRADA
+═══════════════════════════════════════ */
+
 .page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #e9f7f6, #f6f9fc 60%, #dceef5);
+  min-height: 100dvh;
+  background: linear-gradient(145deg, #0b3555 0%, #0e4d73 55%, #134f70 100%);
   display: grid;
   place-items: center;
+  padding: 20px;
+  box-sizing: border-box;
 }
+
 .panel {
-  width: min(410px, calc(100% - 36px));
+  width: min(460px, 100%);
   background: #fff;
-  border: 1px solid #dce9ed;
-  border-radius: 16px;
-  padding: 42px 40px;
-  text-align: center;
-  box-shadow: 0 20px 50px #1b56721c;
+  border-radius: 20px;
+  padding: 36px 36px 32px;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.35);
+  box-sizing: border-box;
 }
-.panel > p {
-  color: #123b56;
-  font-size: 24px;
-  font-weight: 800;
-  margin: 0 0 35px;
+
+/* ── Marca / logo ── */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 32px;
 }
-.panel form {
-  text-align: left;
+
+.brandMark {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #1678a0;
+  color: #fff;
   display: grid;
-  gap: 18px;
+  place-items: center;
+  font-size: 26px;
+  font-weight: 900;
+  flex-shrink: 0;
 }
-.panel label {
+
+.brand strong {
+  display: block;
+  font-size: 17px;
+  font-weight: 800;
+  color: #0d2d47;
+  line-height: 1.2;
+}
+
+.brand span {
   font-size: 12px;
-  color: #416477;
-  font-weight: 700;
+  color: #7a9aad;
 }
-.panel input {
+
+/* ── Seção monitor ── */
+.monitorSection {
+  margin-bottom: 4px;
+}
+
+.monitorLabel {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.8px;
+  color: #7a9aad;
+  margin: 0 0 12px;
+}
+
+.monitorButtons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.monitorBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #1678a0;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 12px;
+  padding: 20px 12px;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+  transition: background 0.18s, transform 0.15s, box-shadow 0.18s;
+  box-shadow: 0 6px 20px rgba(22, 120, 160, 0.3);
+  line-height: 1.3;
+}
+
+.monitorBtn:hover {
+  background: #1389b8;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(22, 120, 160, 0.42);
+}
+
+.monitorBtn:active {
+  transform: scale(0.97);
+}
+
+.monitorHint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: #8aa4b2;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ── Divisor ── */
+.divider {
+  height: 1px;
+  background: #e4edf2;
+  margin: 24px 0 18px;
+}
+
+/* ── Toggle admin ── */
+.adminToggle {
+  width: 100%;
+  background: none;
+  border: 1px solid #d8e7ed;
+  border-radius: 8px;
+  color: #4d7a8c;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 11px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.adminToggle:hover {
+  background: #f0f8fc;
+  color: #1678a0;
+  border-color: #b5d4e0;
+}
+
+.adminToggle svg:last-child {
+  margin-left: auto;
+}
+
+/* ── Formulário admin ── */
+.adminForm {
+  margin-top: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.adminForm label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #416477;
+}
+
+.adminForm input {
   display: block;
   width: 100%;
   border: 1px solid #d2e1e7;
   border-radius: 7px;
-  padding: 13px;
-  margin-top: 7px;
+  padding: 12px 13px;
+  margin-top: 6px;
   font: inherit;
   font-size: 13px;
-  outline-color: #22aa98;
+  outline-color: #1678a0;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
 }
-.panel button {
-  border: 0;
-  border-radius: 7px;
-  background: #0d6f94;
+
+.adminForm input:focus {
+  border-color: #1678a0;
+}
+
+.adminForm button {
+  border: none;
+  border-radius: 8px;
+  background: #0b3555;
   color: #fff;
-  padding: 14px;
+  padding: 13px;
   font-weight: 800;
+  font-size: 13px;
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 8px;
   cursor: pointer;
+  transition: background 0.15s;
 }
+
+.adminForm button:hover:not(:disabled) {
+  background: #134f70;
+}
+
+.adminForm button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .error {
   color: #bc5b4c;
   font-size: 11px;
+  font-weight: 600;
 }
-.secure {
-  color: #199685;
-  background: #effaf7;
-  border-radius: 6px;
-  padding: 10px;
-  margin: 24px 0 16px;
-  font-size: 11px;
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-  align-items: center;
-}
-.panel > a {
-  color: #4d8296;
-  font-size: 12px;
-  text-decoration: none;
+
+@media (max-width: 400px) {
+  .panel {
+    padding: 28px 22px 24px;
+  }
+
+  .monitorButtons {
+    grid-template-columns: 1fr;
+  }
 }

@@ -17,7 +17,7 @@ function createWindow() {
     },
   });
 
-  win.loadURL("https://sistemadesenha-1w3x.vercel.app/dashboard");
+  win.loadURL("https://sistemadesenha-1w3x.vercel.app/login");
 
   win.webContents.on("did-finish-load", () => {
     win.webContents.setAudioMuted(false);
