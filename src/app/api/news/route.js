@@ -73,21 +73,32 @@ export async function POST(request) {
     const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const buffer   = Buffer.from(await file.arrayBuffer());
 
-    // Upload para o Supabase Storage
-    const { error: uploadError } = await db.storage
-      .from(BUCKET)
-      .upload(fileName, buffer, {
-        contentType: file.type,
-        upsert: false,
-      });
+    // Upload para o Supabase Storage via REST direto
+    // (supabase-js ainda não suporta as novas chaves sb_secret_* no Storage)
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (uploadError) throw new Error(`Upload falhou: ${uploadError.message}`);
+    const uploadRes = await fetch(
+      `${supabaseUrl}/storage/v1/object/${BUCKET}/${fileName}`,
+      {
+        method: "POST",
+        headers: {
+          "apikey":         serviceKey,
+          "Authorization":  `Bearer ${serviceKey}`,
+          "Content-Type":   file.type,
+          "x-upsert":       "false",
+        },
+        body: buffer,
+      }
+    );
+
+    if (!uploadRes.ok) {
+      const errText = await uploadRes.text().catch(() => uploadRes.statusText);
+      throw new Error(`Upload falhou: ${errText}`);
+    }
 
     // URL pública do arquivo
-    const { data: urlData } = db.storage.from(BUCKET).getPublicUrl(fileName);
-    const imageUrl = urlData?.publicUrl;
-
-    if (!imageUrl) throw new Error("Não foi possível obter a URL pública da imagem.");
+    const imageUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${fileName}`;
 
     // Salva no banco
     const { data, error: dbError } = await db
@@ -97,8 +108,14 @@ export async function POST(request) {
       .single();
 
     if (dbError) {
-      // Tenta limpar o arquivo que foi enviado
-      await db.storage.from(BUCKET).remove([fileName]).catch(() => {});
+      // Tenta remover o arquivo enviado em caso de falha no banco
+      await fetch(`${supabaseUrl}/storage/v1/object/${BUCKET}/${fileName}`, {
+        method: "DELETE",
+        headers: {
+          "apikey":        serviceKey,
+          "Authorization": `Bearer ${serviceKey}`,
+        },
+      }).catch(() => {});
       throw dbError;
     }
 
@@ -135,10 +152,18 @@ export async function DELETE(request) {
 
     // Remove do Storage se for uma URL do bucket (não base64 legado)
     if (row?.image_url && row.image_url.includes(BUCKET)) {
-      const parts   = row.image_url.split(`/${BUCKET}/`);
+      const parts    = row.image_url.split(`/${BUCKET}/`);
       const filePath = parts[1];
       if (filePath) {
-        await db.storage.from(BUCKET).remove([filePath]).catch(() => {});
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        await fetch(`${supabaseUrl}/storage/v1/object/${BUCKET}/${filePath}`, {
+          method: "DELETE",
+          headers: {
+            "apikey":        serviceKey,
+            "Authorization": `Bearer ${serviceKey}`,
+          },
+        }).catch(() => {});
       }
     }
 
