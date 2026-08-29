@@ -230,30 +230,12 @@ export default function MonitorPage({ params }) {
         const currentHistory = queue.history || [];
         const newEntry = { id: call.id, number: call.number_int, type: callType, time: timeStr };
 
-        // Se já existe um item com mesmo número+tipo no histórico (adicionado localmente
-        // pelo callNext), apenas atualiza o id sem reorganizar a lista — evita duplicação
-        // em produção onde o Realtime chega muito rápido
-        const existingIdx = currentHistory.findIndex(
-          (h) => h.number === call.number_int && h.type === callType
-        );
-
-        let nextHistory;
-        if (existingIdx !== -1) {
-          // Atualiza o id do item existente, mantém posição
-          nextHistory = currentHistory.map((h, i) =>
-            i === existingIdx ? { ...h, id: call.id } : h
-          );
-        } else {
-          // Item novo (veio de outro dispositivo), insere no topo
-          nextHistory = [newEntry, ...currentHistory].slice(0, 30);
-        }
-
         saveQueueState({
           ...prev,
           [sector]: {
             ...queue,
             [field]: call.number_int,
-            history: nextHistory,
+            history: cleanHistory([newEntry, ...currentHistory]).slice(0, 30),
           },
         });
 
@@ -306,21 +288,19 @@ export default function MonitorPage({ params }) {
         return;
       }
 
+      // Atualiza só o contador atual para feedback visual imediato.
+      // NÃO adiciona ao histórico — o Realtime é a única fonte de verdade
+      // para o histórico, evitando duplicação em produção.
       const latest = readQueueState();
       const q = normalizeQueue(latest[sector]);
       const field = type === "preferencial" ? "priorityCurrent" : "normalCurrent";
-      const timeStr = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" })
-        .format(new Date());
 
-      // Adiciona ao histórico local imediatamente para feedback visual rápido.
-      // Quando o Realtime chegar, vai reconhecer que o item já está no topo
-      // pelo número+tipo e apenas atribuir o id do banco, sem duplicar.
       saveQueueState({
         ...latest,
         [sector]: {
           ...q,
           [field]: next,
-          history: [{ number: next, type, time: timeStr }, ...q.history].slice(0, 10),
+          // histórico inalterado — Realtime vai inserir
         },
       });
 
