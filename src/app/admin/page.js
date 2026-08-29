@@ -13,14 +13,12 @@ import {
   Save,
   ShieldCheck,
   Trash2,
-  UserPlus,
 } from "lucide-react";
 import {
   getQueueSnapshot,
   getServerQueueSnapshot,
   getServerSessionSnapshot,
   getSessionSnapshot,
-  GUICHES,
   normalizeQueue,
   saveQueueState,
   SECTORS,
@@ -37,11 +35,7 @@ function getNewsSnapshot() {
   if (typeof window === "undefined") return serverNewsSnapshot;
   return newsCache;
 }
-
-function getServerNewsSnapshot() {
-  return serverNewsSnapshot;
-}
-
+function getServerNewsSnapshot() { return serverNewsSnapshot; }
 function subscribeNews(callback) {
   window.addEventListener("storage", callback);
   window.addEventListener("news-updated", callback);
@@ -53,69 +47,51 @@ function subscribeNews(callback) {
 
 export default function AdminPage() {
   const router = useRouter();
-  const session = useSyncExternalStore(
-    subscribeSession,
-    getSessionSnapshot,
-    getServerSessionSnapshot
-  );
-  const state = useSyncExternalStore(
-    subscribeQueue,
-    getQueueSnapshot,
-    getServerQueueSnapshot
-  );
-  const news = useSyncExternalStore(
-    subscribeNews,
-    getNewsSnapshot,
-    getServerNewsSnapshot
-  );
 
-  const [title, setTitle] = useState("");
-  const [image, setImage] = useState("");
-  const [user, setUser] = useState({
-    name: "",
-    login: "",
-    password: "",
-    sector: "farmacia",
-    guiche: "none",
-  });
-  const [message, setMessage] = useState("");
-  const [stats, setStats] = useState(null);
-  const [draftNews, setDraftNews] = useState([]);
-  const [savingNews, setSavingNews] = useState(false);
+  const session = useSyncExternalStore(subscribeSession, getSessionSnapshot, getServerSessionSnapshot);
+  const state   = useSyncExternalStore(subscribeQueue,   getQueueSnapshot,   getServerQueueSnapshot);
+  const news    = useSyncExternalStore(subscribeNews,    getNewsSnapshot,    getServerNewsSnapshot);
+
+  const [title, setTitle]               = useState("");
+  const [image, setImage]               = useState("");
+  const [message, setMessage]           = useState("");
+  const [stats, setStats]               = useState(null);
+  const [draftNews, setDraftNews]       = useState([]);
+  const [savingNews, setSavingNews]     = useState(false);
   const [resettingSector, setResettingSector] = useState({});
-  const [, refreshNews] = useState(0);
+  const [, refreshNews]                 = useState(0);
 
-  // Redirecionamento de segurança caso não seja Admin
+  /* segurança: só admin */
   useEffect(() => {
     const current = getSessionSnapshot();
     if (!current || current.role !== "admin") router.push("/login");
   }, [router]);
 
-  // Carrega lista inicial de notícias da API
+  /* notícias */
   useEffect(() => {
     fetch("/api/news")
-      .then((response) => (response.ok ? response.json() : null))
+      .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data?.news) return;
         newsCache.splice(0, newsCache.length, ...data.news);
         setDraftNews(data.news);
-        refreshNews((version) => version + 1);
+        refreshNews((v) => v + 1);
         window.dispatchEvent(new Event("news-updated"));
       })
-      .catch(() => undefined);
+      .catch(() => {});
   }, []);
 
-  // Carrega estatísticas do sistema
+  /* estatísticas */
   useEffect(() => {
     fetch("/api/stats?days=30")
-      .then((response) => (response.ok ? response.json() : null))
+      .then((r) => (r.ok ? r.json() : null))
       .then(setStats)
-      .catch(() => undefined);
+      .catch(() => {});
   }, []);
 
   if (!session) return null;
 
-  // Reseta a numeração de um setor (ou de todos com sectorId = "all")
+  /* ── reset de fila ── */
   async function resetSector(sectorId) {
     const isAll = sectorId === "all";
     const label = isAll
@@ -129,58 +105,47 @@ export default function AdminPage() {
     if (!window.confirm(msg)) return;
 
     const sectorsToReset = isAll ? Object.keys(SECTORS) : [sectorId];
-
-    // Marca como "resetando"
     setResettingSector((prev) => {
       const next = { ...prev };
-      for (const s of sectorsToReset) next[s] = true;
+      sectorsToReset.forEach((s) => (next[s] = true));
       return next;
     });
     setMessage("");
 
     try {
-      // Zera estado local
       const currentState = getQueueSnapshot();
       const next = { ...currentState };
-      for (const s of sectorsToReset) {
-        next[s] = {
-          ...normalizeQueue(currentState[s]),
-          normalCurrent: 0,
-          priorityCurrent: 0,
-          history: [],
-        };
-      }
+      sectorsToReset.forEach((s) => {
+        next[s] = { ...normalizeQueue(currentState[s]), normalCurrent: 0, priorityCurrent: 0, history: [] };
+      });
       saveQueueState(next);
 
-      // Zera no banco
-      const response = await fetch("/api/queue/reset", {
+      const res  = await fetch("/api/queue/reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sector: sectorId }),
       });
-      const data = await response.json().catch(() => ({}));
+      const data = await res.json().catch(() => ({}));
 
-      if (!response.ok && !data.localOnly) {
-        setMessage(data.error || "Erro ao zerar o contador no banco de dados.");
+      if (!res.ok && !data.localOnly) {
+        setMessage(data.error || "Erro ao zerar o contador no banco.");
         return;
       }
-
-      setMessage(
-        isAll
-          ? "Todas as senhas foram resetadas. Numeração reinicia em 001."
-          : `Senhas de "${label}" zeradas. Numeração reinicia em 001.`
-      );
+      setMessage(isAll
+        ? "Todas as senhas foram resetadas. Numeração reinicia em 001."
+        : `Senhas de "${label}" zeradas. Numeração reinicia em 001.`);
     } catch {
       setMessage("Erro ao zerar os contadores.");
     } finally {
       setResettingSector((prev) => {
         const next = { ...prev };
-        for (const s of sectorsToReset) delete next[s];
+        sectorsToReset.forEach((s) => delete next[s]);
         return next;
       });
     }
   }
 
+  /* ── notícias ── */
   function addNews(event) {
     event.preventDefault();
     if (!title || !image) return;
@@ -195,57 +160,34 @@ export default function AdminPage() {
     setMessage("");
     try {
       const removed = news.filter(
-        (item) => !draftNews.some((draft) => String(draft.id) === String(item.id))
+        (item) => !draftNews.some((d) => String(d.id) === String(item.id))
       );
       for (const item of removed) {
         await fetch(`/api/news?id=${item.id}`, { method: "DELETE" });
       }
-
       const created = [];
-      for (const item of draftNews.filter((item) => String(item.id).startsWith("draft-"))) {
-        const response = await fetch("/api/news", {
+      for (const item of draftNews.filter((d) => String(d.id).startsWith("draft-"))) {
+        const res  = await fetch("/api/news", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ title: item.title, image: item.image }),
         });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
         created.push(data.news);
       }
-
-      const response = await fetch("/api/news");
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-
+      const res  = await fetch("/api/news");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
       newsCache.splice(0, newsCache.length, ...data.news);
       setDraftNews(data.news);
-      refreshNews((version) => version + 1);
+      refreshNews((v) => v + 1);
       window.dispatchEvent(new Event("news-updated"));
-
       setMessage(`${created.length} notícia(s) salva(s) com sucesso.`);
-    } catch (error) {
-      setMessage(error.message || "Não foi possível salvar as notícias.");
+    } catch (err) {
+      setMessage(err.message || "Não foi possível salvar as notícias.");
     } finally {
       setSavingNews(false);
-    }
-  }
-
-  async function addUser(event) {
-    event.preventDefault();
-    setMessage("");
-    try {
-      const response = await fetch("/api/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(user),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-
-      setUser({ name: "", login: "", password: "", sector: "farmacia", guiche: "none" });
-      setMessage(`Usuário ${data.login} criado para ${SECTORS[data.sector]?.name || data.sector}.`);
-    } catch (error) {
-      setMessage(error.message || "Não foi possível criar o usuário.");
     }
   }
 
@@ -265,13 +207,8 @@ export default function AdminPage() {
   return (
     <main className={styles.page}>
       <header>
-        <div>
-          <ShieldCheck size={19} /> PAINEL ADMINISTRATIVO
-        </div>
-        <Link
-          href="/"
-          onClick={() => window.localStorage.removeItem(SESSION_KEY)}
-        >
+        <div><ShieldCheck size={19} /> PAINEL ADMINISTRATIVO</div>
+        <Link href="/login" onClick={() => window.localStorage.removeItem(SESSION_KEY)}>
           <LogOut size={16} /> Sair
         </Link>
       </header>
@@ -281,14 +218,13 @@ export default function AdminPage() {
           <div>
             <p>CONTROLE CENTRAL</p>
             <h1>Administração</h1>
-            <span>
-              Gerencie as unidades de atendimento, novos usuários e as notícias do monitor.
-            </span>
+            <span>Gerencie as filas de atendimento e as notícias do monitor.</span>
           </div>
         </div>
 
         {message && <div className={styles.alertBox}>{message}</div>}
 
+        {/* ── Controle de filas ── */}
         <section className={styles.section}>
           <div className={styles.sectionTitle}>
             <div>
@@ -296,10 +232,11 @@ export default function AdminPage() {
               <h2>Controle dos atendimentos</h2>
             </div>
           </div>
+
           <div className={styles.sectors}>
             {Object.values(SECTORS).map((item) => {
-              const queue = normalizeQueue(state[item.id]);
-              const isResetting = !!resettingSector[item.id];
+              const queue      = normalizeQueue(state[item.id]);
+              const isReset    = !!resettingSector[item.id];
               return (
                 <article key={item.id}>
                   <div>
@@ -310,17 +247,17 @@ export default function AdminPage() {
                     </small>
                   </div>
                   <div className={styles.cardActions}>
-                    <Link href={`/monitor/${item.id}`}>
-                      <Monitor size={16} /> Monitor
+                    <Link href={`/monitor/${item.id}`} target="_blank">
+                      <Monitor size={16} /> Abrir Monitor
                     </Link>
                     <button
                       type="button"
                       onClick={() => resetSector(item.id)}
-                      disabled={isResetting}
+                      disabled={isReset}
                       className={styles.resetSectorButton}
                     >
                       <RotateCcw size={16} />
-                      {isResetting ? "Resetando..." : "Resetar senhas"}
+                      {isReset ? "Resetando…" : "Resetar senhas"}
                     </button>
                   </div>
                 </article>
@@ -331,9 +268,7 @@ export default function AdminPage() {
           <div className={styles.resetAllWrapper}>
             <div className={styles.resetAllInfo}>
               <AlertTriangle size={16} />
-              <span>
-                Resetar todos os setores de uma vez — numeração volta para 001 em todos.
-              </span>
+              <span>Resetar todos os setores de uma vez — numeração volta para 001 em todos.</span>
             </div>
             <button
               type="button"
@@ -342,73 +277,12 @@ export default function AdminPage() {
               disabled={Object.keys(resettingSector).length > 0}
             >
               <RotateCcw size={16} />
-              {Object.keys(resettingSector).length > 0 ? "Resetando..." : "Resetar todos os setores"}
+              {Object.keys(resettingSector).length > 0 ? "Resetando…" : "Resetar todos os setores"}
             </button>
           </div>
         </section>
 
-        <section className={styles.section}>
-          <div className={styles.sectionTitle}>
-            <div>
-              <p>ACESSOS</p>
-              <h2>Criar usuário de atendimento</h2>
-            </div>
-          </div>
-          <form className={styles.newsForm} onSubmit={addUser}>
-            <input
-              value={user.name}
-              onChange={(event) =>
-                setUser({ ...user, name: event.target.value })
-              }
-              placeholder="Nome completo"
-              required
-            />
-            <input
-              value={user.login}
-              onChange={(event) =>
-                setUser({ ...user, login: event.target.value })
-              }
-              placeholder="Login (ex: farmacia.atendimento)"
-              pattern="[a-zA-Z0-9.-]+"
-              required
-            />
-            <input
-              type="password"
-              minLength={6}
-              value={user.password}
-              onChange={(event) =>
-                setUser({ ...user, password: event.target.value })
-              }
-              placeholder="Senha (mínimo 6 caracteres)"
-              required
-            />
-            <select
-              value={user.sector}
-              onChange={(event) =>
-                setUser({ ...user, sector: event.target.value })
-              }
-            >
-              <option value="farmacia">Farmácia</option>
-              <option value="recepcao">Recepção Saúde</option>
-            </select>
-            <select
-              value={user.guiche}
-              onChange={(event) =>
-                setUser({ ...user, guiche: event.target.value })
-              }
-            >
-              {GUICHES.map((guiche) => (
-                <option key={guiche.id} value={guiche.id}>
-                  {guiche.name}
-                </option>
-              ))}
-            </select>
-            <button type="submit">
-              <UserPlus size={16} /> Criar usuário
-            </button>
-          </form>
-        </section>
-
+        {/* ── Notícias do monitor ── */}
         <section className={styles.section}>
           <div className={styles.sectionTitle}>
             <div>
@@ -416,22 +290,17 @@ export default function AdminPage() {
               <h2>Notícias do monitor</h2>
             </div>
           </div>
+
           <form className={styles.newsForm} onSubmit={addNews}>
             <input
               value={title}
-              onChange={(event) => setTitle(event.target.value)}
+              onChange={(e) => setTitle(e.target.value)}
               placeholder="Título da notícia"
               required
             />
             <label className={styles.upload}>
-              <ImagePlus size={18} />{" "}
-              {image ? "Imagem selecionada" : "Adicionar imagem"}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={readImage}
-                required
-              />
+              <ImagePlus size={18} /> {image ? "Imagem selecionada" : "Adicionar imagem"}
+              <input type="file" accept="image/*" onChange={readImage} required />
             </label>
             <button type="submit">
               <ImagePlus size={16} /> Adicionar à lista
@@ -439,21 +308,11 @@ export default function AdminPage() {
           </form>
 
           <div className={styles.newsGrid}>
-            {draftNews.map((item, index) => (
-              <article key={`${item.title}-${index}`}>
-                <Image
-                  src={item.image}
-                  alt=""
-                  width={300}
-                  height={170}
-                  unoptimized
-                />
+            {draftNews.map((item, i) => (
+              <article key={`${item.title}-${i}`}>
+                <Image src={item.image} alt="" width={300} height={170} unoptimized />
                 <strong>{item.title}</strong>
-                <button
-                  className={styles.deleteNews}
-                  type="button"
-                  onClick={() => deleteNews(item.id)}
-                >
+                <button className={styles.deleteNews} type="button" onClick={() => deleteNews(item.id)}>
                   <Trash2 size={14} /> Excluir
                 </button>
               </article>
@@ -466,10 +325,11 @@ export default function AdminPage() {
             onClick={saveNews}
             disabled={savingNews}
           >
-            <Save size={16} /> {savingNews ? "Salvando..." : "Salvar notícias"}
+            <Save size={16} /> {savingNews ? "Salvando…" : "Salvar notícias"}
           </button>
         </section>
 
+        {/* ── Histórico ── */}
         <section className={styles.section}>
           <div className={styles.sectionTitle}>
             <div>
@@ -478,9 +338,9 @@ export default function AdminPage() {
             </div>
             <select
               defaultValue="30"
-              onChange={(event) =>
-                fetch(`/api/stats?days=${event.target.value}`)
-                  .then((response) => (response.ok ? response.json() : null))
+              onChange={(e) =>
+                fetch(`/api/stats?days=${e.target.value}`)
+                  .then((r) => (r.ok ? r.json() : null))
                   .then(setStats)
               }
             >
@@ -510,25 +370,21 @@ export default function AdminPage() {
               </div>
 
               <div className={styles.historyList}>
-                {stats.recent?.map((item, index) => (
-                  <div key={`${item.created_at}-${index}`}>
+                {stats.recent?.map((item, i) => (
+                  <div key={`${item.created_at}-${i}`}>
                     <strong>{item.number_str}</strong>
                     <span>{SECTORS[item.sector_id || item.sector]?.name || item.sector_id || item.sector}</span>
-                    <span>
-                      {["preferencial", "preferential"].includes(item.type) ? "Preferencial" : "Normal"}
-                    </span>
+                    <span>{["preferencial", "preferential"].includes(item.type) ? "Preferencial" : "Normal"}</span>
                     <time>
-                      {new Intl.DateTimeFormat("pt-BR", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      }).format(new Date(item.created_at))}
+                      {new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" })
+                        .format(new Date(item.created_at))}
                     </time>
                   </div>
                 ))}
               </div>
             </>
           ) : (
-            <p>Carregando histórico...</p>
+            <p>Carregando histórico…</p>
           )}
         </section>
       </section>

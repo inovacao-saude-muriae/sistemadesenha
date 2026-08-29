@@ -27,9 +27,9 @@ function createWindow() {
 // Atalhos Globais: funcionam mesmo com a janela em segundo plano/minimizada
 function registerGlobalShortcuts() {
   const shortcuts = [
-    { keys: ["PageDown", "Right"], triggerKey: "arrowright" }, // Chamar Normal
-    { keys: ["PageUp", "Left"], triggerKey: "arrowleft" },     // Chamar Preferencial
-    { keys: ["B", "."], triggerKey: "b" }                     // Botão Luz (Re-chamar)
+    { keys: ["Right"],  triggerKey: "ArrowRight" }, // Próxima normal
+    { keys: ["Left"],   triggerKey: "ArrowLeft"  }, // Preferencial
+    { keys: ["Up"],     triggerKey: "ArrowUp"    }, // Repetir
   ];
 
   shortcuts.forEach(({ keys, triggerKey }) => {

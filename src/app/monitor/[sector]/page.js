@@ -9,7 +9,7 @@ import {
   useSyncExternalStore,
   memo,
 } from "react";
-import { Clock3, RotateCcw, Volume2, VolumeX } from "lucide-react";
+import { Clock3 } from "lucide-react";
 import {
   formatQueueNumber,
   getQueueSnapshot,
@@ -21,7 +21,7 @@ import {
   subscribeQueue,
   withQueueLock,
 } from "../../../lib/queue";
-import { isSupabaseConfigured, getRealtimeClient, supabase } from "../../../lib/supabase";
+import { isSupabaseConfigured, getRealtimeClient } from "../../../lib/supabase";
 import {
   forceAnnounce,
   monitorSpeak,
@@ -31,35 +31,31 @@ import {
 } from "../../../lib/speech";
 import styles from "./Monitor.module.css";
 
-/* ─── estado de notícias isolado ─── */
+/* ─── notícias ─── */
 let newsSnapshot = [];
 const serverNewsSnapshot = [];
 const monitorServerSnapshot = {
   farmacia: { normalCurrent: 0, priorityCurrent: 0, history: [] },
   recepcao: { normalCurrent: 0, priorityCurrent: 0, history: [] },
 };
-
 let lastSpokenCallId = null;
 
 function getNewsSnapshot() {
   if (typeof window === "undefined") return serverNewsSnapshot;
   return newsSnapshot;
 }
-
-function subscribeNews(callback) {
-  window.addEventListener("storage", callback);
-  window.addEventListener("news-updated", callback);
+function subscribeNews(cb) {
+  window.addEventListener("storage", cb);
+  window.addEventListener("news-updated", cb);
   return () => {
-    window.removeEventListener("storage", callback);
-    window.removeEventListener("news-updated", callback);
+    window.removeEventListener("storage", cb);
+    window.removeEventListener("news-updated", cb);
   };
 }
 
-/* número apenas com dígitos, sem prefixo de letra */
 function formatMonitorNumber(number) {
   const n = Number(number) || 0;
-  if (n === 1000) return "1000";
-  return String(n).padStart(3, "0");
+  return n === 1000 ? "1000" : String(n).padStart(3, "0");
 }
 
 function cleanHistory(history = []) {
@@ -74,7 +70,7 @@ function cleanHistory(history = []) {
   });
 }
 
-/* ─── Carrossel de notícias — memo para não causar re-render na fala ─── */
+/* ─── carrossel de notícias isolado (evita re-render da voz) ─── */
 const NewsCarousel = memo(function NewsCarousel() {
   const news = useSyncExternalStore(subscribeNews, getNewsSnapshot, () => serverNewsSnapshot);
   const [newsIndex, setNewsIndex] = useState(0);
@@ -126,9 +122,10 @@ const NewsCarousel = memo(function NewsCarousel() {
   );
 });
 
-/* ══════════════════════════════════════════════════════════
-   PÁGINA PRINCIPAL DO MONITOR
-══════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════
+   MONITOR — tela pública de senhas
+   Controle via atalhos de teclado / passador
+══════════════════════════════════════════════ */
 export default function MonitorPage({ params }) {
   const resolvedParams = params ? (params.then ? use(params) : params) : {};
   const sector = resolvedParams?.sector || "farmacia";
@@ -138,75 +135,46 @@ export default function MonitorPage({ params }) {
   const [time, setTime] = useState("");
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [calling, setCalling] = useState(false);
-  const [callStatus, setCallStatus] = useState("");
-  const [panelVisible, setPanelVisible] = useState(false);
 
   const audioEnabledRef = useRef(false);
-  const hideTimerRef = useRef(null);
-
   audioEnabledRef.current = audioEnabled;
-
-  /* ─── lógica de mostrar/ocultar o painel ─── */
-  const showPanel = useCallback(() => {
-    setPanelVisible(true);
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = setTimeout(() => setPanelVisible(false), 4000);
-  }, []);
-
-  const keepPanel = useCallback(() => {
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = setTimeout(() => setPanelVisible(false), 4000);
-  }, []);
-
-  /* mouse perto da borda inferior (80px) */
-  useEffect(() => {
-    function onMouseMove(e) {
-      if (window.innerHeight - e.clientY < 80) showPanel();
-    }
-    window.addEventListener("mousemove", onMouseMove);
-    return () => window.removeEventListener("mousemove", onMouseMove);
-  }, [showPanel]);
-
-  /* toque na parte inferior (touch devices) */
-  useEffect(() => {
-    function onTouchStart(e) {
-      const touch = e.touches[0];
-      if (touch && window.innerHeight - touch.clientY < 80) showPanel();
-    }
-    window.addEventListener("touchstart", onTouchStart);
-    return () => window.removeEventListener("touchstart", onTouchStart);
-  }, [showPanel]);
-
-  /* limpa o timer ao desmontar */
-  useEffect(() => {
-    return () => { if (hideTimerRef.current) clearTimeout(hideTimerRef.current); };
-  }, []);
 
   /* relógio */
   useEffect(() => {
     const t = setInterval(() => {
-      setTime(new Intl.DateTimeFormat("pt-BR", {
-        hour: "2-digit", minute: "2-digit", second: "2-digit",
-      }).format(new Date()));
+      setTime(
+        new Intl.DateTimeFormat("pt-BR", {
+          hour: "2-digit", minute: "2-digit", second: "2-digit",
+        }).format(new Date())
+      );
     }, 1000);
     return () => clearInterval(t);
   }, []);
 
-  /* ativa fala do monitor após unlock */
+  /* desbloqueia áudio no primeiro clique/tecla */
+  useEffect(() => {
+    const unlock = () => {
+      unlockSpeech();
+      speakText("Som ativado.");
+      setAudioEnabled(true);
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
+  /* registra esta aba como alto-falante após áudio desbloqueado */
   useEffect(() => {
     if (!audioEnabled) return;
-    unlockSpeech();
     return registerMonitorSpeaker();
   }, [audioEnabled]);
 
-  /* ativa áudio no primeiro clique */
-  const enableAudio = () => {
-    unlockSpeech();
-    speakText("Som ativado.");
-    setAudioEnabled(true);
-  };
-
-  /* ─── Supabase Realtime ─── */
+  /* Supabase Realtime */
   useEffect(() => {
     if (!isSupabaseConfigured || !sector) return;
     const db = getRealtimeClient();
@@ -279,11 +247,10 @@ export default function MonitorPage({ params }) {
     return () => { db.removeChannel(channel); };
   }, [sector]);
 
-  /* ─── Chamar próxima senha ─── */
+  /* ─── chamar próxima senha (via teclado / passador) ─── */
   const callNext = useCallback(async (type) => {
     if (calling) return;
     setCalling(true);
-    setCallStatus("Chamando…");
 
     await withQueueLock(async () => {
       let next = null;
@@ -301,7 +268,6 @@ export default function MonitorPage({ params }) {
               ? nextQueueNumber(ls.priorityCurrent)
               : nextQueueNumber(ls.normalCurrent);
           } else {
-            setCallStatus(data.error || "Erro ao chamar senha.");
             setCalling(false);
             return;
           }
@@ -317,7 +283,6 @@ export default function MonitorPage({ params }) {
 
       next = Number(next);
       if (!Number.isInteger(next) || next < 1 || next > 1000) {
-        setCallStatus("Não foi possível obter o número.");
         setCalling(false);
         return;
       }
@@ -333,47 +298,67 @@ export default function MonitorPage({ params }) {
         [sector]: {
           ...q,
           [field]: next,
-          history: [
-            { number: next, type, time: timeStr },
-            ...q.history,
-          ].slice(0, 10),
+          history: [{ number: next, type, time: timeStr }, ...q.history].slice(0, 10),
         },
       });
 
-      const label = type === "preferencial" ? "Preferencial" : "Normal";
-      setCallStatus(`${label} ${formatQueueNumber(next, type)} chamada`);
-
-      if (audioEnabledRef.current) {
-        forceAnnounce(next, type);
-      }
+      if (audioEnabledRef.current) forceAnnounce(next, type);
     });
 
     setCalling(false);
   }, [calling, sector]);
 
-  /* ─── Repetir última senha ─── */
+  /* ─── repetir última senha ─── */
   const reCall = useCallback(() => {
     const q = normalizeQueue((getQueueSnapshot() || monitorServerSnapshot)[sector]);
     const last = q.history[0];
-    if (!last) { setCallStatus("Nenhuma senha para repetir."); return; }
-    setCallStatus(`Repetindo: ${formatQueueNumber(last.number, last.type)}`);
+    if (!last) return;
     if (audioEnabledRef.current) forceAnnounce(last.number, last.type);
   }, [sector]);
 
-  /* ─── Atalhos de teclado ─── */
+  /* ─── atalhos de teclado ─── */
   useEffect(() => {
     function onKey(e) {
       if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(e.target.tagName)) return;
-      const k = e.key.toLowerCase();
-      if (["arrowright", "pagedown", " "].includes(k)) { e.preventDefault(); callNext("normal"); }
-      else if (["arrowleft", "pageup"].includes(k)) { e.preventDefault(); callNext("preferencial"); }
-      else if (["b", ".", "f5", "escape"].includes(k)) { e.preventDefault(); reCall(); }
+      const k = e.key;
+      if (k === "ArrowRight")  { e.preventDefault(); callNext("normal"); }
+      else if (k === "ArrowLeft")  { e.preventDefault(); callNext("preferencial"); }
+      else if (k === "ArrowUp")    { e.preventDefault(); reCall(); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [callNext, reCall]);
 
-  /* ─── Dados para render ─── */
+  /* ─── atalhos de mouse ─── */
+  useEffect(() => {
+    function onMouseDown(e) {
+      // ignora cliques em botões/links
+      if (e.target.closest("a, button, input, select, textarea")) return;
+      if (e.button === 0) { e.preventDefault(); callNext("normal"); }
+      else if (e.button === 2) { e.preventDefault(); callNext("preferencial"); }
+    }
+    function onWheel(e) {
+      if (e.target.closest("a, button, input, select, textarea")) return;
+      e.preventDefault();
+      reCall();
+    }
+    function onContextMenu(e) {
+      // bloqueia o menu de contexto para o botão direito funcionar
+      if (!e.target.closest("a, button, input, select, textarea")) {
+        e.preventDefault();
+      }
+    }
+    window.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("contextmenu", onContextMenu);
+    return () => {
+      window.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("contextmenu", onContextMenu);
+    };
+  }, [callNext, reCall]);
+
+  /* ─── render ─── */
   const info = SECTORS[sector] || SECTORS.farmacia;
   const current = state[sector] || monitorServerSnapshot[sector];
   const validHistory = cleanHistory(current.history || []);
@@ -383,8 +368,6 @@ export default function MonitorPage({ params }) {
 
   return (
     <main className={styles.monitor}>
-
-      {/* ── Cabeçalho ── */}
       <header className={styles.header}>
         <div className={styles.sectorTitle}>{info.name.toUpperCase()}</div>
         <div className={styles.heading}>
@@ -403,13 +386,9 @@ export default function MonitorPage({ params }) {
         </div>
       </header>
 
-      {/* ── Conteúdo ── */}
       <div className={styles.content}>
-
-        {/* Coluna esquerda: senha + histórico */}
         <section className={styles.leftColumn}>
 
-          {/* Senha em destaque */}
           <section className={`${styles.featured} ${isPriority ? styles.featuredPriority : ""}`}>
             <p>SENHA</p>
             <strong>{formatMonitorNumber(latest.number)}</strong>
@@ -419,7 +398,6 @@ export default function MonitorPage({ params }) {
             <small>Dirija-se ao balcão de atendimento</small>
           </section>
 
-          {/* Últimas senhas */}
           <section className={styles.recent}>
             <p className={styles.kicker}>ÚLTIMAS SENHAS</p>
             {recentCalls.length > 0 ? recentCalls.map((item, i) => (
@@ -433,88 +411,16 @@ export default function MonitorPage({ params }) {
                 <time>{item.time}</time>
               </div>
             )) : (
-              <p className={styles.emptyHistory}>Aguardando chamadas…</p>
+              <p style={{ fontSize: "14px", color: "#888", marginTop: "12px" }}>
+                Aguardando chamadas anteriores...
+              </p>
             )}
           </section>
         </section>
 
-        {/* Coluna direita: notícias */}
         <section className={styles.news}>
           <NewsCarousel />
         </section>
-      </div>
-
-      {/* ═══════════════════════════════════════════════
-          PAINEL DE CONTROLE — passa senhas
-          Oculto por padrão, aparece ao mover mouse
-          para a borda inferior da tela (ou tocar)
-      ═══════════════════════════════════════════════ */}
-
-      {/* Zona de gatilho invisível na borda */}
-      <div className={styles.callerTrigger} onMouseEnter={showPanel} />
-
-      <div
-        className={`${styles.callerPanel} ${panelVisible ? styles.callerPanelVisible : ""}`}
-        onMouseEnter={keepPanel}
-        onMouseLeave={() => {
-          if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-          hideTimerRef.current = setTimeout(() => setPanelVisible(false), 1200);
-        }}
-      >
-
-        {/* Status da última chamada */}
-        {callStatus && (
-          <span className={styles.callerStatus}>{callStatus}</span>
-        )}
-
-        {/* Botão Repetir */}
-        <button
-          className={`${styles.callerBtn} ${styles.callerRepeat}`}
-          onClick={reCall}
-          disabled={calling || !validHistory.length}
-          aria-label="Repetir última senha"
-          title="Repetir (Esc)"
-        >
-          <RotateCcw size={18} />
-          <span>REPETIR</span>
-        </button>
-
-        {/* Botão Preferencial */}
-        <button
-          className={`${styles.callerBtn} ${styles.callerPriority}`}
-          onClick={() => callNext("preferencial")}
-          disabled={calling}
-          aria-label="Chamar preferencial"
-          title="Preferencial (←)"
-        >
-          <span className={styles.callerBtnIcon}>⭐</span>
-          <span>PREFERENCIAL</span>
-        </button>
-
-        {/* Botão Próxima — o maior, mais chamativo */}
-        <button
-          className={`${styles.callerBtn} ${styles.callerNext}`}
-          onClick={() => callNext("normal")}
-          disabled={calling}
-          aria-label="Próxima senha"
-          title="Próxima (→)"
-        >
-          <span className={styles.callerBtnIcon}>▶</span>
-          <span>PRÓXIMA SENHA</span>
-        </button>
-
-        {/* Botão de áudio */}
-        <button
-          className={`${styles.callerBtn} ${audioEnabled ? styles.callerAudioOn : styles.callerAudioOff}`}
-          onClick={enableAudio}
-          disabled={audioEnabled}
-          aria-label={audioEnabled ? "Áudio ativo" : "Ativar áudio"}
-          title="Ativar áudio"
-        >
-          {audioEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
-          <span>{audioEnabled ? "ÁUDIO ON" : "ÁUDIO OFF"}</span>
-        </button>
-
       </div>
     </main>
   );
