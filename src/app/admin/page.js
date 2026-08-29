@@ -62,6 +62,7 @@ export default function AdminPage() {
   const [savingNews, setSavingNews]     = useState(false);
   const [resettingSector, setResettingSector] = useState({});
   const [, refreshNews]                 = useState(0);
+  const pendingFileRef                  = useRef(null);
 
   // filtros de histórico
   const [filterSector, setFilterSector] = useState("");
@@ -168,8 +169,6 @@ export default function AdminPage() {
   }
 
   /* ── notícias ── */
-  const pendingFileRef = useRef(null);
-
   function addNews(event) {
     event.preventDefault();
     if (!title || !pendingFileRef.current) return;
@@ -432,78 +431,24 @@ export default function AdminPage() {
           {statsLoading && <p className={styles.loadingMsg}>Carregando…</p>}
 
           {stats && !statsLoading && (
-            <>
-              {/* cards de totais */}
-              <div className={styles.statsGrid}>
-                <article className={styles.statCard}>
-                  <strong>{stats.summary?.total ?? 0}</strong>
-                  <span>Total no período</span>
-                </article>
-                <article className={styles.statCard}>
-                  <strong>{stats.summary?.today ?? 0}</strong>
-                  <span>Atendimentos hoje</span>
-                </article>
-                <article className={`${styles.statCard} ${styles.statCardNormal}`}>
-                  <strong>{stats.summary?.normal ?? 0}</strong>
-                  <span>Senhas normais</span>
-                </article>
-                <article className={`${styles.statCard} ${styles.statCardPref}`}>
-                  <strong>{stats.summary?.preferencial ?? 0}</strong>
-                  <span>Preferenciais</span>
-                </article>
-              </div>
-
-              {/* tabelas por setor */}
-              {stats.noDb ? (
-                <p className={styles.historyEmpty} style={{ marginTop: 24 }}>
-                  Banco de dados não configurado. Os dados aparecerão aqui após a conexão com o Supabase.
-                </p>
-              ) : (
-                Object.values(SECTORS)
-                  .filter((sec) => !filterSector || filterSector === sec.id)
-                  .map((sec) => {
-                    const rows = stats.recentBySector?.[sec.id] || [];
-                    return (
-                      <div key={sec.id} className={styles.historyBlock}>
-                        <h3 className={styles.historyBlockTitle}>{sec.name}</h3>
-                        {rows.length === 0 ? (
-                          <p className={styles.historyEmpty}>Nenhuma chamada no período.</p>
-                        ) : (
-                          <>
-                            <div className={styles.historyHead}>
-                              <span>Senha</span>
-                              <span>Tipo</span>
-                              <span>Data / Hora</span>
-                            </div>
-                            <div className={styles.historyList}>
-                              {rows.map((item, i) => (
-                                <div key={`${item.created_at}-${i}`} className={styles.historyRow}>
-                                  <strong>{item.number_str}</strong>
-                                  <span className={
-                                    ["preferencial", "preferential"].includes(item.type)
-                                      ? styles.tagPriority
-                                      : styles.tagNormal
-                                  }>
-                                    {["preferencial", "preferential"].includes(item.type)
-                                      ? "Preferencial"
-                                      : "Normal"}
-                                  </span>
-                                  <time>
-                                    {new Intl.DateTimeFormat("pt-BR", {
-                                      dateStyle: "short",
-                                      timeStyle: "short",
-                                    }).format(new Date(item.created_at))}
-                                  </time>
-                                </div>
-                              ))}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })
-              )}
-            </>
+            <div className={styles.statsGrid}>
+              <article className={styles.statCard}>
+                <strong>{stats.summary?.total ?? 0}</strong>
+                <span>Total no período</span>
+              </article>
+              <article className={styles.statCard}>
+                <strong>{stats.summary?.today ?? 0}</strong>
+                <span>Atendimentos hoje</span>
+              </article>
+              <article className={`${styles.statCard} ${styles.statCardNormal}`}>
+                <strong>{stats.summary?.normal ?? 0}</strong>
+                <span>Senhas normais</span>
+              </article>
+              <article className={`${styles.statCard} ${styles.statCardPref}`}>
+                <strong>{stats.summary?.preferencial ?? 0}</strong>
+                <span>Preferenciais</span>
+              </article>
+            </div>
           )}
         </section>
       </section>

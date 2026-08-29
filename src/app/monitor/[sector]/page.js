@@ -63,7 +63,8 @@ function cleanHistory(history = []) {
   const seen = new Set();
   return history.filter((item) => {
     if (!item?.number) return false;
-    const key = `${item.id || item.number}-${item.type}`;
+    // Deduplica por número+tipo (ignora id pois itens locais não têm id ainda)
+    const key = `${item.number}-${item.type}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -226,15 +227,33 @@ export default function MonitorPage({ params }) {
         const timeStr = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" })
           .format(new Date(call.created_at || Date.now()));
 
+        const currentHistory = queue.history || [];
+        const newEntry = { id: call.id, number: call.number_int, type: callType, time: timeStr };
+
+        // Se já existe um item com mesmo número+tipo no histórico (adicionado localmente
+        // pelo callNext), apenas atualiza o id sem reorganizar a lista — evita duplicação
+        // em produção onde o Realtime chega muito rápido
+        const existingIdx = currentHistory.findIndex(
+          (h) => h.number === call.number_int && h.type === callType
+        );
+
+        let nextHistory;
+        if (existingIdx !== -1) {
+          // Atualiza o id do item existente, mantém posição
+          nextHistory = currentHistory.map((h, i) =>
+            i === existingIdx ? { ...h, id: call.id } : h
+          );
+        } else {
+          // Item novo (veio de outro dispositivo), insere no topo
+          nextHistory = [newEntry, ...currentHistory].slice(0, 30);
+        }
+
         saveQueueState({
           ...prev,
           [sector]: {
             ...queue,
             [field]: call.number_int,
-            history: cleanHistory([
-              { id: call.id, number: call.number_int, type: callType, time: timeStr },
-              ...(queue.history || []),
-            ]).slice(0, 30),
+            history: nextHistory,
           },
         });
 
@@ -293,6 +312,9 @@ export default function MonitorPage({ params }) {
       const timeStr = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" })
         .format(new Date());
 
+      // Adiciona ao histórico local imediatamente para feedback visual rápido.
+      // Quando o Realtime chegar, vai reconhecer que o item já está no topo
+      // pelo número+tipo e apenas atribuir o id do banco, sem duplicar.
       saveQueueState({
         ...latest,
         [sector]: {

@@ -9,6 +9,76 @@ function getDb() {
   return null;
 }
 
+// Retorna lista de candidatos JWT para o Storage, do mais privilegiado ao menos
+// Testa SERVICE_JWT (legado service_role), depois ANON_JWT (legado anon),
+// depois SERVICE_ROLE_KEY (caso seja JWT clássico) e ANON_KEY (caso seja JWT)
+function getStorageJwtCandidates() {
+  const candidates = [
+    process.env.SUPABASE_SERVICE_JWT,
+    process.env.SUPABASE_ANON_JWT,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  ];
+  // Filtra: só aceita JWTs clássicos (eyJ...) — o Storage rejeita sb_secret_*
+  return candidates.filter(
+    (k) => k && /^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(k)
+  );
+}
+
+// Tenta o upload com cada candidato JWT até um funcionar
+async function uploadToStorage(fileName, buffer, contentType) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const candidates  = getStorageJwtCandidates();
+
+  if (!supabaseUrl || candidates.length === 0) {
+    throw new Error("Nenhuma chave JWT disponível para o Storage.");
+  }
+
+  let lastError = "";
+  for (const jwt of candidates) {
+    const res = await fetch(
+      `${supabaseUrl}/storage/v1/object/${BUCKET}/${fileName}`,
+      {
+        method:  "POST",
+        headers: {
+          "apikey":        jwt,
+          "Authorization": `Bearer ${jwt}`,
+          "Content-Type":  contentType,
+          "x-upsert":      "false",
+        },
+        body: buffer,
+      }
+    );
+
+    if (res.ok) {
+      return `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${fileName}`;
+    }
+
+    lastError = await res.text().catch(() => res.statusText);
+    // Se não for problema de autenticação, não tenta próxima chave
+    if (!res.status.toString().startsWith("4")) break;
+  }
+
+  throw new Error(`Upload falhou: ${lastError}`);
+}
+
+async function deleteFromStorage(filePath) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const candidates  = getStorageJwtCandidates();
+  if (!supabaseUrl || candidates.length === 0) return;
+
+  for (const jwt of candidates) {
+    const res = await fetch(
+      `${supabaseUrl}/storage/v1/object/${BUCKET}/${filePath}`,
+      {
+        method:  "DELETE",
+        headers: { "apikey": jwt, "Authorization": `Bearer ${jwt}` },
+      }
+    );
+    if (res.ok) return;
+  }
+}
+
 // GET — lista notícias ativas
 export async function GET() {
   const db = getDb();
@@ -30,7 +100,7 @@ export async function GET() {
 
     return Response.json({
       news: (data || []).map((item) => ({
-        id: String(item.id),
+        id:    String(item.id),
         title: item.title,
         image: item.image_url,
       })),
@@ -41,64 +111,36 @@ export async function GET() {
   }
 }
 
-// POST — faz upload da imagem para o Storage e salva a URL no banco
+// POST — upload da imagem para o Storage e salva URL no banco
 export async function POST(request) {
   const db = getDb();
   if (!db) return Response.json({ error: "Banco não configurado." }, { status: 503 });
 
   try {
-    const formData   = await request.formData();
-    const title      = String(formData.get("title") || "").trim();
-    const file       = formData.get("image"); // File object
+    const formData = await request.formData();
+    const title    = String(formData.get("title") || "").trim();
+    const file     = formData.get("image");
 
     if (!title) {
       return Response.json({ error: "Informe um título." }, { status: 400 });
     }
-
     if (!file || typeof file === "string") {
       return Response.json({ error: "Envie um arquivo de imagem." }, { status: 400 });
     }
 
-    // Validação de tipo e tamanho (máx 5 MB)
     const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"];
     if (!allowedTypes.includes(file.type)) {
       return Response.json({ error: "Formato inválido. Use JPG, PNG, WEBP ou GIF." }, { status: 400 });
     }
     if (file.size > 5 * 1024 * 1024) {
-      return Response.json({ error: "A imagem deve ter no máximo 5 MB." }, { status: 400 });
+      return Response.json({ error: "Imagem deve ter no máximo 5 MB." }, { status: 400 });
     }
 
-    // Gera nome único para o arquivo
-    const ext      = file.name.split(".").pop().toLowerCase() || "jpg";
+    const ext      = (file.name.split(".").pop() || "jpg").toLowerCase();
     const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const buffer   = Buffer.from(await file.arrayBuffer());
 
-    // Upload para o Supabase Storage via REST direto
-    // (supabase-js ainda não suporta as novas chaves sb_secret_* no Storage)
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    const uploadRes = await fetch(
-      `${supabaseUrl}/storage/v1/object/${BUCKET}/${fileName}`,
-      {
-        method: "POST",
-        headers: {
-          "apikey":         serviceKey,
-          "Authorization":  `Bearer ${serviceKey}`,
-          "Content-Type":   file.type,
-          "x-upsert":       "false",
-        },
-        body: buffer,
-      }
-    );
-
-    if (!uploadRes.ok) {
-      const errText = await uploadRes.text().catch(() => uploadRes.statusText);
-      throw new Error(`Upload falhou: ${errText}`);
-    }
-
-    // URL pública do arquivo
-    const imageUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${fileName}`;
+    const imageUrl = await uploadToStorage(fileName, buffer, file.type);
 
     // Salva no banco
     const { data, error: dbError } = await db
@@ -108,14 +150,7 @@ export async function POST(request) {
       .single();
 
     if (dbError) {
-      // Tenta remover o arquivo enviado em caso de falha no banco
-      await fetch(`${supabaseUrl}/storage/v1/object/${BUCKET}/${fileName}`, {
-        method: "DELETE",
-        headers: {
-          "apikey":        serviceKey,
-          "Authorization": `Bearer ${serviceKey}`,
-        },
-      }).catch(() => {});
+      await deleteFromStorage(fileName);
       throw dbError;
     }
 
@@ -128,7 +163,7 @@ export async function POST(request) {
   }
 }
 
-// DELETE — desativa notícia (soft delete) e remove imagem do Storage
+// DELETE — soft delete no banco + remove arquivo do Storage
 export async function DELETE(request) {
   const db = getDb();
   if (!db) return Response.json({ error: "Banco não configurado." }, { status: 503 });
@@ -139,32 +174,18 @@ export async function DELETE(request) {
       return Response.json({ error: "ID inválido." }, { status: 400 });
     }
 
-    // Busca a URL para remover do Storage
     const { data: row } = await db
       .from("news")
       .select("image_url")
       .eq("id", id)
       .maybeSingle();
 
-    // Soft delete no banco
     const { error } = await db.from("news").update({ active: false }).eq("id", id);
     if (error) throw error;
 
-    // Remove do Storage se for uma URL do bucket (não base64 legado)
-    if (row?.image_url && row.image_url.includes(BUCKET)) {
-      const parts    = row.image_url.split(`/${BUCKET}/`);
-      const filePath = parts[1];
-      if (filePath) {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY;
-        await fetch(`${supabaseUrl}/storage/v1/object/${BUCKET}/${filePath}`, {
-          method: "DELETE",
-          headers: {
-            "apikey":        serviceKey,
-            "Authorization": `Bearer ${serviceKey}`,
-          },
-        }).catch(() => {});
-      }
+    if (row?.image_url?.includes(`/${BUCKET}/`)) {
+      const filePath = row.image_url.split(`/${BUCKET}/`)[1];
+      if (filePath) await deleteFromStorage(filePath);
     }
 
     return Response.json({ ok: true });
