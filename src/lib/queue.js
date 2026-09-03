@@ -86,7 +86,7 @@ function clearHistoryFromNewDay(state) {
           historyDate: today,
         },
       ];
-    })
+    }),
   );
   if (changed && typeof window !== "undefined")
     window.localStorage.setItem(QUEUE_KEY, JSON.stringify(nextState));
@@ -98,7 +98,7 @@ export function readQueueState() {
   try {
     const saved = window.localStorage.getItem(QUEUE_KEY);
     return clearHistoryFromNewDay(
-      saved ? JSON.parse(saved) : getInitialState()
+      saved ? JSON.parse(saved) : getInitialState(),
     );
   } catch {
     return getInitialState();
@@ -148,7 +148,7 @@ export async function withQueueLock(callback) {
     return navigator.locks.request(
       "saude-queue-call",
       { mode: "exclusive" },
-      callback
+      callback,
     );
   const lockKey = `${QUEUE_KEY}-lock`;
   const token = `${Date.now()}-${Math.random()}`;
@@ -201,6 +201,7 @@ export function subscribeSession(callback) {
 }
 
 export function getSessionSnapshot() {
+  if (typeof window === "undefined") return null;
   const raw = window.localStorage.getItem(SESSION_KEY);
   if (raw === clientSessionRaw) return clientSessionSnapshot;
   clientSessionRaw = raw;
