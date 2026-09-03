@@ -3,6 +3,19 @@
 -- Só adiciona o que falta, não quebra o que já existe
 -- ============================================================
 
+-- ── 0. Username dos usuários ──
+alter table public.profiles add column if not exists username text;
+alter table public.profiles add column if not exists guiche_id text not null default 'none';
+alter table public.profiles add column if not exists active boolean not null default true;
+
+alter table public.profiles drop constraint if exists profiles_guiche_id_check;
+alter table public.profiles add constraint profiles_guiche_id_check
+  check (guiche_id in ('none', 'guiche-1', 'guiche-2', 'guiche-3', 'guiche-4'));
+
+create unique index if not exists profiles_username_unique_idx
+  on public.profiles (lower(username))
+  where username is not null;
+
 -- ── 1. Tabela de sequências de fila (substitui queue_counters) ──
 create table if not exists public.queue_sequences (
   sector_id    text    not null references public.sectors(id),

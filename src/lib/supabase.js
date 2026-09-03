@@ -5,31 +5,19 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-// Cliente padrão — usado para auth e operações gerais
+// Cliente único — reutilizado em toda a aplicação (auth, queries e Realtime)
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
     })
   : null;
 
-// Cliente dedicado ao Realtime — sem desabilitar persistSession,
-// para que o WebSocket consiga se autenticar corretamente no browser.
-// Usado exclusivamente pelo monitor para receber eventos em tempo real.
-let _realtimeClient = null;
+// Alias para o monitor — usa o mesmo cliente singleton, sem instância extra
 export function getRealtimeClient() {
-  if (!isSupabaseConfigured) return null;
-  if (!_realtimeClient) {
-    _realtimeClient = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-      },
-      realtime: {
-        params: { eventsPerSecond: 10 },
-      },
-    });
-  }
-  return _realtimeClient;
+  return supabase;
 }
 
 export function createAuthClient() {

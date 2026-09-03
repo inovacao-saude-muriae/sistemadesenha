@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -37,7 +43,9 @@ function getNewsSnapshot() {
   if (typeof window === "undefined") return serverNewsSnapshot;
   return newsCache;
 }
-function getServerNewsSnapshot() { return serverNewsSnapshot; }
+function getServerNewsSnapshot() {
+  return serverNewsSnapshot;
+}
 function subscribeNews(callback) {
   window.addEventListener("storage", callback);
   window.addEventListener("news-updated", callback);
@@ -50,26 +58,38 @@ function subscribeNews(callback) {
 export default function AdminPage() {
   const router = useRouter();
 
-  const session = useSyncExternalStore(subscribeSession, getSessionSnapshot, getServerSessionSnapshot);
-  const state   = useSyncExternalStore(subscribeQueue,   getQueueSnapshot,   getServerQueueSnapshot);
-  const news    = useSyncExternalStore(subscribeNews,    getNewsSnapshot,    getServerNewsSnapshot);
+  const session = useSyncExternalStore(
+    subscribeSession,
+    getSessionSnapshot,
+    getServerSessionSnapshot,
+  );
+  const state = useSyncExternalStore(
+    subscribeQueue,
+    getQueueSnapshot,
+    getServerQueueSnapshot,
+  );
+  const news = useSyncExternalStore(
+    subscribeNews,
+    getNewsSnapshot,
+    getServerNewsSnapshot,
+  );
 
-  const [title, setTitle]               = useState("");
-  const [image, setImage]               = useState("");
-  const [message, setMessage]           = useState("");
-  const [stats, setStats]               = useState(null);
+  const [title, setTitle] = useState("");
+  const [image, setImage] = useState("");
+  const [message, setMessage] = useState("");
+  const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
-  const [draftNews, setDraftNews]       = useState([]);
-  const [savingNews, setSavingNews]     = useState(false);
+  const [draftNews, setDraftNews] = useState([]);
+  const [savingNews, setSavingNews] = useState(false);
   const [resettingSector, setResettingSector] = useState({});
-  const [, refreshNews]                 = useState(0);
-  const pendingFileRef                  = useRef(null);
+  const [, refreshNews] = useState(0);
+  const pendingFileRef = useRef(null);
 
   // filtros de histórico
   const [filterSector, setFilterSector] = useState("");
-  const [filterFrom,   setFilterFrom]   = useState("");
-  const [filterTo,     setFilterTo]     = useState("");
-  const [filterDays,   setFilterDays]   = useState("30");
+  const [filterFrom, setFilterFrom] = useState("");
+  const [filterTo, setFilterTo] = useState("");
+  const [filterDays, setFilterDays] = useState("30");
 
   /* segurança: só admin */
   useEffect(() => {
@@ -92,26 +112,35 @@ export default function AdminPage() {
   }, []);
 
   /* busca de estatísticas com filtros */
-  const fetchStats = useCallback((overrides = {}) => {
-    const days   = overrides.days   !== undefined ? overrides.days   : filterDays;
-    const sector = overrides.sector !== undefined ? overrides.sector : filterSector;
-    const from   = overrides.from   !== undefined ? overrides.from   : filterFrom;
-    const to     = overrides.to     !== undefined ? overrides.to     : filterTo;
+  const fetchStats = useCallback(
+    (overrides = {}) => {
+      const days = overrides.days !== undefined ? overrides.days : filterDays;
+      const sector =
+        overrides.sector !== undefined ? overrides.sector : filterSector;
+      const from = overrides.from !== undefined ? overrides.from : filterFrom;
+      const to = overrides.to !== undefined ? overrides.to : filterTo;
 
-    const params = new URLSearchParams({ days });
-    if (sector) params.set("sector", sector);
-    if (from)   params.set("from", from);
-    if (to)     params.set("to", to);
+      const params = new URLSearchParams({ days });
+      if (sector) params.set("sector", sector);
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
 
-    setStatsLoading(true);
-    fetch(`/api/stats?${params}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { setStats(data); setStatsLoading(false); })
-      .catch(() => setStatsLoading(false));
-  }, [filterDays, filterSector, filterFrom, filterTo]);
+      setStatsLoading(true);
+      fetch(`/api/stats?${params}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          setStats(data);
+          setStatsLoading(false);
+        })
+        .catch(() => setStatsLoading(false));
+    },
+    [filterDays, filterSector, filterFrom, filterTo],
+  );
 
   /* estatísticas — carrega ao montar */
-  useEffect(() => { fetchStats(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    fetchStats();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!session) return null;
 
@@ -140,11 +169,16 @@ export default function AdminPage() {
       const currentState = getQueueSnapshot();
       const next = { ...currentState };
       sectorsToReset.forEach((s) => {
-        next[s] = { ...normalizeQueue(currentState[s]), normalCurrent: 0, priorityCurrent: 0, history: [] };
+        next[s] = {
+          ...normalizeQueue(currentState[s]),
+          normalCurrent: 0,
+          priorityCurrent: 0,
+          history: [],
+        };
       });
       saveQueueState(next);
 
-      const res  = await fetch("/api/queue/reset", {
+      const res = await fetch("/api/queue/reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sector: sectorId }),
@@ -155,9 +189,11 @@ export default function AdminPage() {
         setMessage(data.error || "Erro ao zerar o contador no banco.");
         return;
       }
-      setMessage(isAll
-        ? "Todas as senhas foram resetadas. Numeração reinicia em 001."
-        : `Senhas de "${label}" zeradas. Numeração reinicia em 001.`);
+      setMessage(
+        isAll
+          ? "Todas as senhas foram resetadas. Numeração reinicia em 001."
+          : `Senhas de "${label}" zeradas. Numeração reinicia em 001.`,
+      );
     } catch {
       setMessage("Erro ao zerar os contadores.");
     } finally {
@@ -173,11 +209,21 @@ export default function AdminPage() {
   function addNews(event) {
     event.preventDefault();
     if (!title || !pendingFileRef.current) return;
-    setDraftNews([{ id: `draft-${Date.now()}`, title, image, _file: pendingFileRef.current }, ...draftNews]);
+    setDraftNews([
+      {
+        id: `draft-${Date.now()}`,
+        title,
+        image,
+        _file: pendingFileRef.current,
+      },
+      ...draftNews,
+    ]);
     setTitle("");
     setImage("");
     pendingFileRef.current = null;
-    setMessage("Alteração pendente. Clique em 'Salvar notícias' para publicar.");
+    setMessage(
+      "Alteração pendente. Clique em 'Salvar notícias' para publicar.",
+    );
   }
 
   async function saveNews() {
@@ -186,7 +232,7 @@ export default function AdminPage() {
     try {
       // Remove os que foram deletados do rascunho
       const removed = news.filter(
-        (item) => !draftNews.some((d) => String(d.id) === String(item.id))
+        (item) => !draftNews.some((d) => String(d.id) === String(item.id)),
       );
       for (const item of removed) {
         await fetch(`/api/news?id=${item.id}`, { method: "DELETE" });
@@ -194,17 +240,19 @@ export default function AdminPage() {
 
       // Cria os novos (que têm id começando com "draft-")
       const created = [];
-      for (const item of draftNews.filter((d) => String(d.id).startsWith("draft-"))) {
+      for (const item of draftNews.filter((d) =>
+        String(d.id).startsWith("draft-"),
+      )) {
         const fd = new FormData();
         fd.append("title", item.title);
         fd.append("image", item._file);
-        const res  = await fetch("/api/news", { method: "POST", body: fd });
+        const res = await fetch("/api/news", { method: "POST", body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         created.push(data.news);
       }
 
-      const res  = await fetch("/api/news");
+      const res = await fetch("/api/news");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       newsCache.splice(0, newsCache.length, ...data.news);
@@ -221,7 +269,9 @@ export default function AdminPage() {
 
   function deleteNews(id) {
     setDraftNews(draftNews.filter((item) => String(item.id) !== String(id)));
-    setMessage("Exclusão pendente. Clique em 'Salvar notícias' para confirmar.");
+    setMessage(
+      "Exclusão pendente. Clique em 'Salvar notícias' para confirmar.",
+    );
   }
 
   function readImage(event) {
@@ -235,11 +285,16 @@ export default function AdminPage() {
   return (
     <main className={styles.page}>
       <header>
-        <div><ShieldCheck size={19} /> PAINEL ADMINISTRATIVO</div>
-        <Link href="/login" onClick={() => {
-          window.localStorage.removeItem(SESSION_KEY);
-          document.cookie = "session=; path=/; max-age=0";
-        }}>
+        <div>
+          <ShieldCheck size={19} /> PAINEL ADMINISTRATIVO
+        </div>
+        <Link
+          href="/login"
+          onClick={() => {
+            window.localStorage.removeItem(SESSION_KEY);
+            document.cookie = "session=; path=/; max-age=0";
+          }}
+        >
           <LogOut size={16} /> Sair
         </Link>
       </header>
@@ -249,7 +304,9 @@ export default function AdminPage() {
           <div>
             <p>CONTROLE CENTRAL</p>
             <h1>Administração</h1>
-            <span>Gerencie as filas de atendimento e as notícias do monitor.</span>
+            <span>
+              Gerencie as filas de atendimento e as notícias do monitor.
+            </span>
           </div>
         </div>
 
@@ -266,15 +323,16 @@ export default function AdminPage() {
 
           <div className={styles.sectors}>
             {Object.values(SECTORS).map((item) => {
-              const queue      = normalizeQueue(state[item.id]);
-              const isReset    = !!resettingSector[item.id];
+              const queue = normalizeQueue(state[item.id]);
+              const isReset = !!resettingSector[item.id];
               return (
                 <article key={item.id}>
                   <div>
                     <strong>{item.name}</strong>
                     <small>
                       Normal: N{String(queue.normalCurrent).padStart(3, "0")} ·
-                      Preferencial: P{String(queue.priorityCurrent).padStart(3, "0")}
+                      Preferencial: P
+                      {String(queue.priorityCurrent).padStart(3, "0")}
                     </small>
                   </div>
                   <div className={styles.cardActions}>
@@ -299,7 +357,10 @@ export default function AdminPage() {
           <div className={styles.resetAllWrapper}>
             <div className={styles.resetAllInfo}>
               <AlertTriangle size={16} />
-              <span>Resetar todos os setores de uma vez — numeração volta para 001 em todos.</span>
+              <span>
+                Resetar todos os setores de uma vez — numeração volta para 001
+                em todos.
+              </span>
             </div>
             <button
               type="button"
@@ -308,7 +369,9 @@ export default function AdminPage() {
               disabled={Object.keys(resettingSector).length > 0}
             >
               <RotateCcw size={16} />
-              {Object.keys(resettingSector).length > 0 ? "Resetando…" : "Resetar todos os setores"}
+              {Object.keys(resettingSector).length > 0
+                ? "Resetando…"
+                : "Resetar todos os setores"}
             </button>
           </div>
         </section>
@@ -330,8 +393,14 @@ export default function AdminPage() {
               required
             />
             <label className={styles.upload}>
-              <ImagePlus size={18} /> {image ? "Imagem selecionada" : "Adicionar imagem"}
-              <input type="file" accept="image/*" onChange={readImage} required />
+              <ImagePlus size={18} />{" "}
+              {image ? "Imagem selecionada" : "Adicionar imagem"}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={readImage}
+                required
+              />
             </label>
             <button type="submit">
               <ImagePlus size={16} /> Adicionar à lista
@@ -341,9 +410,19 @@ export default function AdminPage() {
           <div className={styles.newsGrid}>
             {draftNews.map((item, i) => (
               <article key={`${item.title}-${i}`}>
-                <Image src={item.image} alt="" width={300} height={170} unoptimized />
+                <Image
+                  src={item.image}
+                  alt=""
+                  width={300}
+                  height={170}
+                  unoptimized
+                />
                 <strong>{item.title}</strong>
-                <button className={styles.deleteNews} type="button" onClick={() => deleteNews(item.id)}>
+                <button
+                  className={styles.deleteNews}
+                  type="button"
+                  onClick={() => deleteNews(item.id)}
+                >
                   <Trash2 size={14} /> Excluir
                 </button>
               </article>
@@ -400,7 +479,9 @@ export default function AdminPage() {
               >
                 <option value="">Todos os setores</option>
                 {Object.values(SECTORS).map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -444,7 +525,9 @@ export default function AdminPage() {
                 <strong>{stats.summary?.today ?? 0}</strong>
                 <span>Atendimentos hoje</span>
               </article>
-              <article className={`${styles.statCard} ${styles.statCardNormal}`}>
+              <article
+                className={`${styles.statCard} ${styles.statCardNormal}`}
+              >
                 <strong>{stats.summary?.normal ?? 0}</strong>
                 <span>Senhas normais</span>
               </article>
@@ -458,7 +541,6 @@ export default function AdminPage() {
 
         {/* ── Gerenciamento de usuários ── */}
         <UsersSection />
-
       </section>
     </main>
   );
@@ -474,11 +556,11 @@ function UsersSection() {
   const [showForm, setShowForm] = useState(false);
 
   // form
-  const [email, setEmail]         = useState("");
-  const [password, setPassword]   = useState("");
-  const [fullName, setFullName]   = useState("");
-  const [role, setRole]           = useState("attendant");
-  const [sectorId, setSectorId]   = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [role, setRole] = useState("attendant");
+  const [sectorId, setSectorId] = useState("");
 
   useEffect(() => {
     loadUsers();
@@ -508,7 +590,7 @@ function UsersSection() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email,
+          username,
           password,
           full_name: fullName,
           role,
@@ -519,7 +601,7 @@ function UsersSection() {
       if (!res.ok) throw new Error(data.error);
 
       setMessage(`Usuário ${fullName} criado com sucesso!`);
-      setEmail("");
+      setUsername("");
       setPassword("");
       setFullName("");
       setRole("attendant");
@@ -534,7 +616,11 @@ function UsersSection() {
   }
 
   async function handleDelete(userId, userName) {
-    if (!window.confirm(`Excluir o usuário "${userName}"?\n\nEsta ação não pode ser desfeita.`)) {
+    if (
+      !window.confirm(
+        `Excluir o usuário "${userName}"?\n\nEsta ação não pode ser desfeita.`,
+      )
+    ) {
       return;
     }
 
@@ -578,12 +664,14 @@ function UsersSection() {
         <form className={styles.userForm} onSubmit={handleCreate}>
           <div className={styles.formRow}>
             <label>
-              Email
+              Usuário
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="usuario@exemplo.com"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="nome.sobrenome"
+                pattern="[a-zA-Z0-9]+([._][a-zA-Z0-9]+)*"
+                title="Use o formato nome.sobrenome"
                 required
               />
             </label>
@@ -622,10 +710,15 @@ function UsersSection() {
 
             <label>
               Setor (opcional)
-              <select value={sectorId} onChange={(e) => setSectorId(e.target.value)}>
+              <select
+                value={sectorId}
+                onChange={(e) => setSectorId(e.target.value)}
+              >
                 <option value="">Nenhum</option>
                 {Object.values(SECTORS).map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
                 ))}
               </select>
             </label>
@@ -643,13 +736,15 @@ function UsersSection() {
         {loading && <p className={styles.loadingMsg}>Carregando…</p>}
         {!loading && users.length === 0 && (
           <p className={styles.emptyMsg}>
-            Nenhum usuário cadastrado. Clique em "+ Novo usuário" para criar o primeiro administrador.
+            Nenhum usuário cadastrado. Clique em "+ Novo usuário" para criar o
+            primeiro administrador.
           </p>
         )}
         {!loading && users.length > 0 && (
           <table>
             <thead>
               <tr>
+                <th>Usuário</th>
                 <th>Nome</th>
                 <th>Função</th>
                 <th>Setor</th>
@@ -659,13 +754,24 @@ function UsersSection() {
             <tbody>
               {users.map((u) => (
                 <tr key={u.id}>
+                  <td>{u.username || "—"}</td>
                   <td>{u.full_name}</td>
                   <td>
-                    <span className={u.role === "admin" ? styles.badgeAdmin : styles.badgeAttendant}>
+                    <span
+                      className={
+                        u.role === "admin"
+                          ? styles.badgeAdmin
+                          : styles.badgeAttendant
+                      }
+                    >
                       {u.role === "admin" ? "Administrador" : "Atendente"}
                     </span>
                   </td>
-                  <td>{u.sector_id ? SECTORS[u.sector_id]?.name || u.sector_id : "—"}</td>
+                  <td>
+                    {u.sector_id
+                      ? SECTORS[u.sector_id]?.name || u.sector_id
+                      : "—"}
+                  </td>
                   <td>
                     <button
                       type="button"

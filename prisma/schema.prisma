@@ -10,6 +10,7 @@ datasource db {
 
 model profiles {
   id          String        @id @db.Uuid
+  username    String?       @unique
   full_name   String
   role        user_role?    @default(attendant)
   sector_id   String?

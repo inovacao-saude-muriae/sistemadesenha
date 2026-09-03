@@ -15,19 +15,19 @@
 
 /*
 1. ADMINISTRADOR
-   Email: admin@sistema.local
+   Usuário: admin
    Senha: admin123
    Role: admin
    Setor: (nenhum)
 
 2. ATENDIMENTO RECEPÇÃO
-   Email: recepcao@sistema.local
+   Usuário: recepcao
    Senha: recepcao123
    Role: attendant
    Setor: recepcao
 
 3. ATENDIMENTO FARMÁCIA
-   Email: farmacia@sistema.local
+   Usuário: farmacia
    Senha: farmacia123
    Role: attendant
    Setor: farmacia
@@ -48,7 +48,7 @@
 
 SELECT 
   p.id,
-  u.email,
+   p.username,
   p.full_name,
   p.role,
   p.sector_id,

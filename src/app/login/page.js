@@ -9,11 +9,11 @@ import { SESSION_KEY } from "../../lib/queue";
 import styles from "./Login.module.css";
 
 export default function LoginPage() {
-  const router  = useRouter();
-  const [login, setLogin]       = useState("");
+  const router = useRouter();
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError]       = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -28,7 +28,7 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      
+
       window.localStorage.setItem(SESSION_KEY, JSON.stringify(data));
       document.cookie = `session=1; path=/; max-age=86400; SameSite=Lax`;
       router.push("/home");
@@ -41,15 +41,20 @@ export default function LoginPage() {
 
   return (
     <main className={styles.page}>
-
       {/* ── Hero ── */}
       <div className={styles.hero}>
         <div className={styles.heroContent}>
           <div className={styles.heroMark}>S</div>
-          <h1>Sistema de<br />Atendimento</h1>
+          <h1>
+            Sistema de
+            <br />
+            Atendimento
+          </h1>
           <p>Gerenciamento de senhas e filas para unidades de saúde.</p>
           <div className={styles.heroDots}>
-            <span /><span /><span />
+            <span />
+            <span />
+            <span />
           </div>
         </div>
       </div>
@@ -57,7 +62,6 @@ export default function LoginPage() {
       {/* ── Painel de login ── */}
       <div className={styles.side}>
         <div className={styles.panel}>
-
           {/* brand só no mobile */}
           <div className={styles.mobileBrand}>
             <div className={styles.brandMark}>S</div>
@@ -68,7 +72,9 @@ export default function LoginPage() {
           </div>
 
           <h2 className={styles.panelTitle}>Entrar no sistema</h2>
-          <p className={styles.panelSub}>Digite suas credenciais para continuar.</p>
+          <p className={styles.panelSub}>
+            Digite suas credenciais para continuar.
+          </p>
 
           <form className={styles.form} onSubmit={handleSubmit}>
             <label>
@@ -77,7 +83,9 @@ export default function LoginPage() {
                 type="text"
                 value={login}
                 onChange={(e) => setLogin(e.target.value)}
-                placeholder="ex: admin"
+                placeholder="nome.sobrenome"
+                pattern="[a-zA-Z0-9]+([._][a-zA-Z0-9]+)*"
+                title="Use o formato nome.sobrenome"
                 autoComplete="username"
                 autoFocus
                 required
@@ -103,10 +111,8 @@ export default function LoginPage() {
               {loading ? "Entrando…" : "Entrar"}
             </button>
           </form>
-
         </div>
       </div>
-
     </main>
   );
 }
